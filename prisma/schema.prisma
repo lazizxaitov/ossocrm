@@ -1,0 +1,493 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  ACCOUNTANT
+  INVESTOR
+  WAREHOUSE
+}
+
+enum ContainerStatus {
+  IN_TRANSIT
+  ARRIVED
+  CLOSED
+}
+
+enum SaleStatus {
+  COMPLETED
+  PARTIALLY_PAID
+  DEBT
+  RETURNED
+}
+
+enum ExpenseCategory {
+  LOGISTICS
+  CUSTOMS
+  STORAGE
+  TRANSPORT
+  OTHER
+}
+
+enum AuditAction {
+  CREATE_EXPENSE
+  CREATE_EXPENSE_CORRECTION
+  LOCK_FINANCIAL_PERIOD
+  UNLOCK_FINANCIAL_PERIOD
+}
+
+enum FinancialPeriodStatus {
+  OPEN
+  LOCKED
+}
+
+enum InventorySessionStatus {
+  PENDING
+  CONFIRMED
+  DISCREPANCY
+}
+
+model User {
+  id               String            @id @default(cuid())
+  name             String
+  login            String            @unique
+  password         String
+  role             Role
+  investorId       String?           @unique
+  investorProfile  Investor?         @relation(fields: [investorId], references: [id], onDelete: SetNull)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  currencySettings CurrencySetting[]
+  salesCreated     Sale[]            @relation("SaleCreatedBy")
+  paymentsCreated  Payment[]         @relation("PaymentCreatedBy")
+  returnsCreated   Return[]          @relation("ReturnCreatedBy")
+  payoutsCreated   InvestorPayout[]  @relation("PayoutCreatedBy")
+  expensesCreated  ContainerExpense[] @relation("ExpenseCreatedBy")
+  correctionsMade  ExpenseCorrection[] @relation("ExpenseCorrectionCreatedBy")
+  auditLogs        AuditLog[]        @relation("AuditLogCreatedBy")
+  lockedPeriods    FinancialPeriod[] @relation("PeriodLockedBy")
+  inventorySessionsCreated InventorySession[] @relation("InventoryCreatedBy")
+  inventorySessionsConfirmed InventorySession[] @relation("InventoryConfirmedBy")
+  manualStockEntries      ManualStockEntry[] @relation("ManualStockEntryCreatedBy")
+}
+
+model Product {
+  id           String          @id @default(cuid())
+  name         String
+  categoryId   String?
+  category     ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  size         String          @default("Без размера")
+  sku          String          @unique
+  description  String?
+  imagePath    String?
+  costPriceUSD Float           @default(0)
+  basePriceUSD Float
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  items        ContainerItem[]
+  saleItems    SaleItem[]
+  inventoryItems InventorySessionItem[]
+  manualStockEntries ManualStockEntry[]
+
+  @@index([categoryId])
+}
+
+model ProductSize {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model ProductCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+model Container {
+  id               String          @id @default(cuid())
+  name             String
+  purchaseDate     DateTime
+  arrivalDate      DateTime?
+  status           ContainerStatus @default(IN_TRANSIT)
+  totalPurchaseCNY Float
+  exchangeRate     Float
+  totalPurchaseUSD Float
+  totalExpensesUSD Float           @default(0)
+  netProfitUSD     Float           @default(0)
+  createdAt        DateTime        @default(now())
+  items            ContainerItem[]
+  investments      ContainerInvestment[]
+  payouts          InvestorPayout[]
+  expenses         ContainerExpense[]
+  inventoryItems   InventorySessionItem[]
+  manualStockEntries ManualStockEntry[]
+}
+
+model ContainerItem {
+  id             String    @id @default(cuid())
+  containerId    String
+  productId      String
+  sizeLabel      String?
+  color          String?
+  quantity       Int
+  unitPriceUSD   Float?
+  salePriceUSD   Float?
+  lineTotalUSD   Float?
+  cbm            Float?
+  kg             Float?
+  totalCbm       Float?
+  costPerUnitUSD Float
+  createdAt      DateTime  @default(now())
+  container      Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  saleItems      SaleItem[]
+  inventoryItems InventorySessionItem[]
+  manualStockEntries ManualStockEntry[]
+
+  @@index([containerId])
+  @@index([productId])
+  @@unique([containerId, productId])
+}
+
+model ManualStockEntry {
+  id              String        @id @default(cuid())
+  containerId      String
+  containerItemId  String?
+  productId        String
+  quantity         Int
+  unitPriceUSD     Float?
+  salePriceUSD     Float?
+  lineTotalUSD     Float
+  sizeLabel        String?
+  color            String?
+  cbm              Float?
+  kg               Float?
+  totalCbm         Float?
+  reason           String
+  createdById      String
+  createdAt        DateTime      @default(now())
+  container        Container      @relation(fields: [containerId], references: [id], onDelete: Restrict)
+  containerItem    ContainerItem? @relation(fields: [containerItemId], references: [id], onDelete: SetNull)
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  createdBy        User           @relation("ManualStockEntryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([containerId])
+  @@index([containerItemId])
+  @@index([productId])
+  @@index([createdById])
+}
+
+model CurrencySetting {
+  id           Int      @id
+  cnyToUsdRate Float
+  updatedAt    DateTime @updatedAt
+  updatedById  String
+  updatedBy    User     @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([updatedById])
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  company        String?
+  inn            String?
+  phone          String?
+  address        String?
+  comment        String?
+  creditLimitUSD Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sales          Sale[]
+}
+
+model Sale {
+  id             String      @id @default(cuid())
+  invoiceNumber  String      @unique
+  clientId       String
+  client         Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  totalAmountUSD Float
+  paidAmountUSD  Float
+  debtAmountUSD  Float
+  dueDate        DateTime?
+  status         SaleStatus
+  financialPeriodId String
+  financialPeriod   FinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Restrict)
+  createdById    String
+  createdBy      User        @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime    @default(now())
+  items          SaleItem[]
+  payments       Payment[]
+  returns        Return[]
+
+  @@index([clientId])
+  @@index([createdById])
+  @@index([financialPeriodId])
+}
+
+model SaleItem {
+  id                  String        @id @default(cuid())
+  saleId              String
+  productId           String
+  containerItemId     String
+  quantity            Int
+  costPerUnitUSD      Float
+  salePricePerUnitUSD Float
+  totalUSD            Float
+  sale                Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product             Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  containerItem       ContainerItem @relation(fields: [containerItemId], references: [id], onDelete: Restrict)
+  returnItems         ReturnItem[]
+
+  @@index([saleId])
+  @@index([productId])
+  @@index([containerItemId])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  amountUSD   Float
+  paymentDate DateTime
+  createdById String
+  createdBy   User     @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  @@index([saleId])
+  @@index([createdById])
+}
+
+model Return {
+  id             String       @id @default(cuid())
+  saleId         String
+  sale           Sale         @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  returnNumber   String       @unique
+  totalReturnUSD Float
+  createdById    String
+  createdBy      User         @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+  items          ReturnItem[]
+
+  @@index([saleId])
+  @@index([createdById])
+}
+
+model ReturnItem {
+  id         String   @id @default(cuid())
+  returnId   String
+  saleItemId String
+  quantity   Int
+  amountUSD  Float
+  return     Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleItem   SaleItem @relation(fields: [saleItemId], references: [id], onDelete: Restrict)
+
+  @@index([returnId])
+  @@index([saleItemId])
+}
+
+model DocumentCounter {
+  key       String   @id
+  year      Int
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Investor {
+  id          String                @id @default(cuid())
+  name        String
+  phone       String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  user        User?
+  investments ContainerInvestment[]
+  payouts     InvestorPayout[]
+}
+
+model ContainerInvestment {
+  id                String    @id @default(cuid())
+  containerId       String
+  investorId        String
+  investedAmountUSD Float
+  percentageShare   Float
+  createdAt         DateTime  @default(now())
+  container         Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
+  investor          Investor  @relation(fields: [investorId], references: [id], onDelete: Restrict)
+
+  @@index([containerId])
+  @@index([investorId])
+  @@unique([containerId, investorId])
+}
+
+model InvestorPayout {
+  id          String    @id @default(cuid())
+  investorId  String
+  containerId String
+  amountUSD   Float
+  payoutDate  DateTime
+  financialPeriodId String
+  financialPeriod   FinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Restrict)
+  createdById String
+  createdAt   DateTime  @default(now())
+  investor    Investor  @relation(fields: [investorId], references: [id], onDelete: Restrict)
+  container   Container @relation(fields: [containerId], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("PayoutCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([investorId])
+  @@index([containerId])
+  @@index([createdById])
+  @@index([financialPeriodId])
+}
+
+model ContainerExpense {
+  id          String            @id @default(cuid())
+  containerId String
+  title       String
+  category    ExpenseCategory
+  amountUSD   Float
+  description String?
+  financialPeriodId String
+  financialPeriod   FinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Restrict)
+  createdById String
+  createdAt   DateTime          @default(now())
+  container   Container         @relation(fields: [containerId], references: [id], onDelete: Restrict)
+  createdBy   User              @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  corrections ExpenseCorrection[]
+
+  @@index([containerId])
+  @@index([createdById])
+  @@index([financialPeriodId])
+}
+
+model ExpenseCorrection {
+  id                  String          @id @default(cuid())
+  expenseId           String
+  correctionAmountUSD Float
+  reason              String
+  isConfirmed         Boolean         @default(false)
+  financialPeriodId   String
+  financialPeriod     FinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Restrict)
+  createdById         String
+  createdAt           DateTime        @default(now())
+  expense             ContainerExpense @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  createdBy           User            @relation("ExpenseCorrectionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([expenseId])
+  @@index([createdById])
+  @@index([financialPeriodId])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  action     AuditAction
+  entityType String
+  entityId   String
+  metadata   String?
+  createdById String
+  createdAt  DateTime    @default(now())
+  createdBy  User        @relation("AuditLogCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([createdById])
+  @@index([entityType, entityId])
+}
+
+model SystemControl {
+  id                       Int      @id
+  lastBackupAt             DateTime?
+  inventoryCheckedAt       DateTime?
+  warehouseDiscrepancyCount Int     @default(0)
+  closedMonth              String?
+  plannedMonthlyExpensesUSD Float   @default(0)
+  serverTimeOffsetMinutes  Int      @default(0)
+  serverTimeAuto           Boolean  @default(true)
+  serverTimeZone           String   @default("UTC")
+  manualSystemTime         DateTime?
+  updatedAt                DateTime @updatedAt
+}
+
+model FinancialPeriod {
+  id                String                @id @default(cuid())
+  month             Int
+  year              Int
+  status            FinancialPeriodStatus @default(OPEN)
+  lockedById        String?
+  lockedBy          User?                 @relation("PeriodLockedBy", fields: [lockedById], references: [id], onDelete: SetNull)
+  lockedAt          DateTime?
+  lockReason        String?
+  unlockReason      String?
+  createdAt         DateTime              @default(now())
+  sales             Sale[]
+  expenses          ContainerExpense[]
+  corrections       ExpenseCorrection[]
+  investorPayouts   InvestorPayout[]
+  inventorySessions InventorySession[]
+  adjustments       Adjustment[]
+
+  @@unique([month, year])
+  @@index([status])
+}
+
+model InventorySession {
+  id                String         @id @default(cuid())
+  title             String
+  code              String         @unique
+  status            InventorySessionStatus @default(PENDING)
+  discrepancyCount  Int            @default(0)
+  financialPeriodId String
+  financialPeriod   FinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Restrict)
+  createdById       String
+  createdBy         User           @relation("InventoryCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  confirmedById     String?
+  confirmedBy       User?          @relation("InventoryConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  confirmedAt       DateTime?
+  sentToAdminAt     DateTime?
+  createdAt         DateTime       @default(now())
+  items             InventorySessionItem[]
+
+  @@index([financialPeriodId])
+  @@index([createdById])
+  @@index([confirmedById])
+}
+
+model Adjustment {
+  id                String         @id @default(cuid())
+  title             String
+  amountUSD         Float          @default(0)
+  financialPeriodId String
+  financialPeriod   FinancialPeriod @relation(fields: [financialPeriodId], references: [id], onDelete: Restrict)
+  createdAt         DateTime       @default(now())
+
+  @@index([financialPeriodId])
+}
+
+model InventorySessionItem {
+  id                 String           @id @default(cuid())
+  inventorySessionId String
+  productId          String
+  containerId        String
+  containerItemId    String
+  systemQuantity     Int
+  actualQuantity     Int
+  difference         Int
+  inventorySession   InventorySession @relation(fields: [inventorySessionId], references: [id], onDelete: Cascade)
+  product            Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  container          Container        @relation(fields: [containerId], references: [id], onDelete: Restrict)
+  containerItem      ContainerItem    @relation(fields: [containerItemId], references: [id], onDelete: Restrict)
+
+  @@index([inventorySessionId])
+  @@index([productId])
+  @@index([containerId])
+  @@index([containerItemId])
+}

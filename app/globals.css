@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f5f7;
+  --foreground: #111827;
+  --surface: #ffffff;
+  --surface-soft: #eef2f7;
+  --border: #d9e0ea;
+  --accent: #145da0;
+  --accent-soft: #dbeafe;
+  --ok: #0f766e;
+  --warn: #c2410c;
 }
 
 @theme inline {
@@ -14,13 +21,64 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #f4f5f7;
+    --foreground: #111827;
+    --surface: #ffffff;
+    --surface-soft: #eef2f7;
+    --border: #d9e0ea;
+    --accent: #145da0;
+    --accent-soft: #dbeafe;
+    --ok: #0f766e;
+    --warn: #c2410c;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+}
+
+@keyframes ossoTicker {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.osso-ticker-track {
+  width: max-content;
+  min-width: 200%;
+  animation: ossoTicker 24s linear infinite;
+  white-space: nowrap;
+}
+
+.osso-ticker-track-slow {
+  animation-duration: 30s;
+}
+
+.osso-ticker-row {
+  height: 16px;
+  overflow: hidden;
+}
+
+@keyframes ossoMarquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.osso-marquee-track {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.osso-marquee-active .osso-marquee-track {
+  padding-right: 2rem;
+  animation: ossoMarquee 8s linear infinite;
 }
