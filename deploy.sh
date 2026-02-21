@@ -14,7 +14,15 @@ fi
 
 echo "==> Pull latest code"
 git fetch --all --prune
-git reset --hard origin/main
+if git show-ref --verify --quiet refs/remotes/origin/main; then
+  TARGET_BRANCH="main"
+elif git show-ref --verify --quiet refs/remotes/origin/master; then
+  TARGET_BRANCH="master"
+else
+  TARGET_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+fi
+echo "==> Deploy branch: $TARGET_BRANCH"
+git reset --hard "origin/$TARGET_BRANCH"
 
 echo "==> Install dependencies"
 npm ci
