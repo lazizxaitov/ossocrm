@@ -6,7 +6,7 @@ export function formatUsd(value: number) {
   }).format(value);
 }
 
-export function toNumber(value: string | FormDataEntryValue | null | undefined) {
+export function toNumber(value: number | string | FormDataEntryValue | null | undefined) {
   const normalized = String(value ?? "")
     .trim()
     .replace(",", ".");
