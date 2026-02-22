@@ -40,7 +40,7 @@ export async function loginAction(_: LoginState, formData: FormData): Promise<Lo
 
   (await cookies()).set(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
   });
