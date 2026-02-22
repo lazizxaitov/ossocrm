@@ -10,7 +10,8 @@ export async function GET() {
   }
 
   const { fileName, buffer } = await createDownloadBackup();
-  return new NextResponse(buffer, {
+  const body = new Uint8Array(buffer);
+  return new NextResponse(body, {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
