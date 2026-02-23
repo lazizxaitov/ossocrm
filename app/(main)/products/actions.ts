@@ -149,3 +149,35 @@ export async function updateProductAction(formData: FormData) {
 
   revalidatePath("/products");
 }
+
+export async function deleteProductAction(formData: FormData) {
+  const session = await getRequiredSession();
+  if (session.role !== "SUPER_ADMIN") {
+    throw new Error("Удаление товара доступно только супер-админу.");
+  }
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    throw new Error("Не выбран товар для удаления.");
+  }
+
+  const [containerItemsCount, saleItemsCount, inventoryItemsCount, manualEntriesCount] = await Promise.all([
+    prisma.containerItem.count({ where: { productId: id } }),
+    prisma.saleItem.count({ where: { productId: id } }),
+    prisma.inventorySessionItem.count({ where: { productId: id } }),
+    prisma.manualStockEntry.count({ where: { productId: id } }),
+  ]);
+
+  const blockers: string[] = [];
+  if (containerItemsCount > 0) blockers.push(`в контейнерах: ${containerItemsCount}`);
+  if (saleItemsCount > 0) blockers.push(`в продажах: ${saleItemsCount}`);
+  if (inventoryItemsCount > 0) blockers.push(`в инвентаризациях: ${inventoryItemsCount}`);
+  if (manualEntriesCount > 0) blockers.push(`в ручных приходах: ${manualEntriesCount}`);
+
+  if (blockers.length > 0) {
+    throw new Error(`Нельзя удалить товар, есть связи (${blockers.join(", ")}).`);
+  }
+
+  await prisma.product.delete({ where: { id } });
+  revalidatePath("/products");
+}

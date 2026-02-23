@@ -1,7 +1,6 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+﻿import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getBrandLogoBytes } from "@/lib/brand-logo";
 import { formatUsd } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { SALES_VIEW_ROLES } from "@/lib/rbac";
@@ -56,8 +55,6 @@ export async function GET(_: Request, { params }: RouteParams) {
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const logoBytes = await getBrandLogoBytes(false);
-  const logoImage = logoBytes ? await pdf.embedPng(logoBytes) : null;
 
   const draw = (text: string, x: number, y: number, size = 10, isBold = false) => {
     page.drawText(text, {
@@ -70,20 +67,8 @@ export async function GET(_: Request, { params }: RouteParams) {
   };
 
   let y = 800;
-  if (logoImage) {
-    const targetWidth = 170;
-    const scale = targetWidth / logoImage.width;
-    page.drawImage(logoImage, {
-      x: 40,
-      y: 772,
-      width: targetWidth,
-      height: logoImage.height * scale,
-    });
-    y -= 32;
-  } else {
-    draw("OSSO", 40, y, 18, true);
-    y -= 24;
-  }
+  draw("OSSO", 40, y, 18, true);
+  y -= 24;
   draw("Invoice", 40, y, 14, true);
   y -= 18;
   draw(`Номер: ${sale.invoiceNumber}`, 40, y);
@@ -139,7 +124,7 @@ export async function GET(_: Request, { params }: RouteParams) {
   draw(`Долг: ${formatUsd(sale.debtAmountUSD)}`, 360, y, 11, true);
 
   const bytes = await pdf.save();
-  return new NextResponse(Buffer.from(bytes), {
+  return new NextResponse(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${sale.invoiceNumber}.pdf"`,

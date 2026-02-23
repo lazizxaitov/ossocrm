@@ -1,7 +1,6 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+﻿import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getBrandLogoBytes } from "@/lib/brand-logo";
 import { getPeriodReportData } from "@/lib/period-report";
 import { PERIODS_VIEW_ROLES } from "@/lib/rbac";
 
@@ -22,16 +21,6 @@ export async function GET(_: Request, { params }: RouteParams) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  const logoBytes = await getBrandLogoBytes(true);
-  let logoImage: Awaited<ReturnType<typeof pdf.embedPng>> | null = null;
-  if (logoBytes) {
-    try {
-      logoImage = await pdf.embedPng(logoBytes);
-    } catch {
-      logoImage = null;
-    }
-  }
 
   let page = pdf.addPage([595, 842]);
   let y = 805;
@@ -90,19 +79,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     color: rgb(0.97, 0.98, 1),
   });
 
-  if (logoImage) {
-    const targetWidth = 86;
-    const scale = targetWidth / logoImage.width;
-    page.drawImage(logoImage, {
-      x: 44,
-      y: 764,
-      width: targetWidth,
-      height: logoImage.height * scale,
-    });
-  } else {
-    drawAtSafe(44, 792, "OSSO", 24, true, rgb(0.05, 0.12, 0.25));
-  }
-
+  drawAtSafe(44, 792, "OSSO", 24, true, rgb(0.05, 0.12, 0.25));
   drawAtSafe(44, 774, "Financial accounting and analytics system", 9, false, rgb(0.25, 0.33, 0.45));
   drawAtSafe(390, 794, "APPROVED", 9, true, rgb(0.1, 0.15, 0.25));
   drawAtSafe(390, 779, "Director: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));

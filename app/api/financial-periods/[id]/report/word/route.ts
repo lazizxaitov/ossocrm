@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getBrandLogoDataUri } from "@/lib/brand-logo";
 import { getPeriodReportData } from "@/lib/period-report";
 import { PERIODS_VIEW_ROLES } from "@/lib/rbac";
 
@@ -40,7 +39,6 @@ export async function GET(_: Request, { params }: RouteParams) {
   if (!report) {
     return NextResponse.json({ error: "Период не найден." }, { status: 404 });
   }
-  const logoDataUri = await getBrandLogoDataUri(true);
 
   const monthLabel = `${String(report.period.month).padStart(2, "0")}.${report.period.year}`;
   const html = `<!doctype html>
@@ -59,7 +57,6 @@ export async function GET(_: Request, { params }: RouteParams) {
     .head { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
     .head td { border: none; vertical-align: top; padding: 0; }
     .brand { font-size: 28px; font-weight: 700; letter-spacing: 1px; color: #0f172a; }
-    .brand-logo { width: 118px; height: auto; display: block; border-radius: 6px; }
     .sub { color: #334155; font-size: 12px; margin-top: 2px; }
     .approve { border: 1px solid #cbd5e1; padding: 10px; width: 260px; margin-left: auto; font-size: 11px; }
     .approve p { margin: 2px 0; }
@@ -73,7 +70,7 @@ export async function GET(_: Request, { params }: RouteParams) {
   <table class="head">
     <tr>
       <td>
-        ${logoDataUri ? `<img src="${logoDataUri}" alt="OSSO" class="brand-logo" />` : `<div class="brand">OSSO</div>`}
+        <div class="brand">OSSO</div>
         <div class="sub">Финансовая система учета и аналитики</div>
       </td>
       <td>

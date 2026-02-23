@@ -33,6 +33,19 @@ function formatNumber(value: number | null | undefined, fractionDigits = 2) {
   return Number(value.toFixed(fractionDigits));
 }
 
+function buildContentDispositionFileName(containerName: string, containerId: string) {
+  const safeRaw = (containerName || "").trim();
+  const asciiOnly = safeRaw
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+  const fallback = asciiOnly || `container_${containerId}`;
+  const utf8Name = `container-${safeRaw || containerId}.xls`;
+  const encodedUtf8 = encodeURIComponent(utf8Name);
+  return `attachment; filename="${fallback}.xls"; filename*=UTF-8''${encodedUtf8}`;
+}
+
 export async function GET(_: Request, { params }: RouteParams) {
   const session = await getSession();
   if (!session || !CONTAINERS_VIEW_ROLES.includes(session.role)) {
@@ -134,14 +147,13 @@ export async function GET(_: Request, { params }: RouteParams) {
   </Worksheet>
 </Workbook>`;
 
-  const safeName = container.name.replace(/[\\/:*?"<>|]/g, "_");
-  const fileName = `container-${safeName || container.id}.xls`;
+  const contentDisposition = buildContentDispositionFileName(container.name, container.id);
 
   return new NextResponse(workbook, {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.ms-excel; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Disposition": contentDisposition,
     },
   });
 }

@@ -25,6 +25,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const selectedCategoryId = (params.cat ?? "").trim();
   const currentPage = Math.max(1, Number(params.page ?? "1") || 1);
   const canManage = PRODUCTS_MANAGE_ROLES.includes(session.role);
+  const canDelete = session.role === "SUPER_ADMIN";
   const showFinance = session.role !== "MANAGER" && session.role !== "WAREHOUSE";
 
   const searchWhere = q
@@ -207,6 +208,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                       categories={categories}
                       existingSizes={existingSizes}
                       showFinance={showFinance}
+                      canDelete={canDelete}
                     />
                   </td>
                 ) : null}

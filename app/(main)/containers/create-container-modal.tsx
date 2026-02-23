@@ -17,6 +17,7 @@ type ProductOption = {
   sku: string;
   size: string;
   imagePath?: string | null;
+  costPriceUSD: number;
   basePriceUSD: number;
   categoryName: string;
 };
@@ -198,7 +199,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
           sizeLabel: product.size || "",
           color: "",
           quantity: "1",
-          unitPriceUSD: "",
+          unitPriceUSD: product.costPriceUSD > 0 ? String(product.costPriceUSD) : "",
           salePriceUSD: product.basePriceUSD > 0 ? String(product.basePriceUSD) : "",
           lineTotalUSD: "",
           cbm: "",
@@ -470,7 +471,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                 }`}
               >
                 <p className="mb-2 text-sm font-medium text-slate-800">Добавленные товары</p>
-                <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_72px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
+                <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
                   <p>Товар</p>
                   <p>Размер</p>
                   <p>Количество (QTY)</p>
@@ -483,11 +484,14 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                     const productName = products.find((product) => product.id === row.productId)?.name ?? "";
                     return (
                       <div key={row.key} className="rounded-lg border border-[var(--border)] bg-white p-2">
-                        <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_72px_64px_96px_96px_84px]">
+                        <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px]">
                           <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700">
                             {productName || "—"}
                           </div>
-                          <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700">
+                          <div
+                            title={row.sizeLabel || "Без размера"}
+                            className="truncate rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700"
+                          >
                             {row.sizeLabel || "Без размера"}
                           </div>
                           <div className="flex items-center">

@@ -250,7 +250,7 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
                 }`}
               >
                 <p className="mb-2 text-sm font-medium text-slate-800">Добавленные товары</p>
-                <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_72px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
+                <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
                   <p>Товар</p>
                   <p>Размер</p>
                   <p>Количество (QTY)</p>
@@ -263,11 +263,14 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
                     const productName = products.find((product) => product.id === row.productId)?.name ?? "";
                     return (
                       <div key={row.key} className="rounded-lg border border-[var(--border)] bg-white p-2">
-                        <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_72px_64px_96px_96px_84px]">
+                        <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px]">
                           <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700">
                             {productName || "—"}
                           </div>
-                          <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700">
+                          <div
+                            title={row.sizeLabel || "Без размера"}
+                            className="truncate rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700"
+                          >
                             {row.sizeLabel || "Без размера"}
                           </div>
                           <label className="grid justify-items-start gap-0.5 text-[11px] text-slate-600">

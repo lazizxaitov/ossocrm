@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { updateProductAction } from "@/app/(main)/products/actions";
+import { deleteProductAction, updateProductAction } from "@/app/(main)/products/actions";
+import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
 import { CustomSelect } from "@/components/custom-select";
 
 type ProductCategoryItem = {
@@ -30,12 +31,15 @@ type EditProductModalProps = {
   categories: ProductCategoryItem[];
   existingSizes: ProductSizeItem[];
   showFinance: boolean;
+  canDelete: boolean;
 };
 
-export function EditProductModal({ product, categories, existingSizes, showFinance }: EditProductModalProps) {
+export function EditProductModal({ product, categories, existingSizes, showFinance, canDelete }: EditProductModalProps) {
   const [open, setOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState(product.categoryId ?? "");
   const [selectedSize, setSelectedSize] = useState(product.size);
 
@@ -62,6 +66,22 @@ export function EditProductModal({ product, categories, existingSizes, showFinan
       setError(submitError instanceof Error ? submitError.message : "Не удалось сохранить товар.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeletePending(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.set("id", product.id);
+      await deleteProductAction(formData);
+      setConfirmDeleteOpen(false);
+      setOpen(false);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Не удалось удалить товар.");
+    } finally {
+      setDeletePending(false);
     }
   }
 
@@ -172,15 +192,25 @@ export function EditProductModal({ product, categories, existingSizes, showFinan
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  disabled={saving || !selectedSize.trim()}
+                  disabled={saving || deletePending || !selectedSize.trim()}
                   className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? "Сохранение..." : "Сохранить"}
                 </button>
+                {canDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    disabled={saving || deletePending}
+                    className="rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Удалить
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  disabled={saving}
+                  disabled={saving || deletePending}
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Отмена
@@ -190,6 +220,17 @@ export function EditProductModal({ product, categories, existingSizes, showFinan
           </div>
         </div>
       ) : null}
+      <CustomConfirmDialog
+        open={confirmDeleteOpen}
+        title="Удаление товара"
+        message={`Удалить товар \"${product.name}\"? Действие необратимо.`}
+        confirmLabel="Удалить"
+        cancelLabel="Отмена"
+        danger
+        pending={deletePending}
+        onCancel={() => !deletePending && setConfirmDeleteOpen(false)}
+        onConfirm={handleDelete}
+      />
     </>
   );
 }
