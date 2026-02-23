@@ -25,6 +25,8 @@ type EditProductModalProps = {
     description: string | null;
     imagePath: string | null;
     costPriceUSD: number;
+    cbm: number | null;
+    kg: number | null;
     basePriceUSD: number;
     categoryId: string | null;
   };
@@ -147,6 +149,24 @@ export function EditProductModal({ product, categories, existingSizes, showFinan
                     className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                   />
                   <input
+                    name="cbm"
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    defaultValue={product.cbm ?? ""}
+                    placeholder="CBM (необязательно)"
+                    className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                  />
+                  <input
+                    name="kg"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    defaultValue={product.kg ?? ""}
+                    placeholder="KG (необязательно)"
+                    className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                  />
+                  <input
                     name="salePriceUSD"
                     type="number"
                     min="0.01"
@@ -160,6 +180,8 @@ export function EditProductModal({ product, categories, existingSizes, showFinan
               ) : (
                 <>
                   <input type="hidden" name="costPriceUSD" value={String(product.costPriceUSD)} />
+                  <input type="hidden" name="cbm" value={String(product.cbm ?? "")} />
+                  <input type="hidden" name="kg" value={String(product.kg ?? "")} />
                   <input type="hidden" name="salePriceUSD" value={String(product.basePriceUSD)} />
                 </>
               )}

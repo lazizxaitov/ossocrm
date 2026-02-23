@@ -268,6 +268,24 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
               />
 
               <input
+                name="cbm"
+                type="number"
+                min="0"
+                step="0.0001"
+                placeholder="CBM (необязательно)"
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+
+              <input
+                name="kg"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="KG (необязательно)"
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+
+              <input
                 name="salePriceUSD"
                 type="number"
                 min="0.01"

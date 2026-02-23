@@ -18,6 +18,8 @@ type ProductOption = {
   size: string;
   imagePath?: string | null;
   costPriceUSD: number;
+  cbm: number;
+  kg: number;
   basePriceUSD: number;
   categoryName: string;
 };
@@ -52,6 +54,15 @@ function toNumber(value: string) {
   const normalized = String(value ?? "").trim().replace(",", ".");
   const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
+}
+
+function recalcTotalCbm(row: ItemRow) {
+  const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+  const cbm = toNumber(row.cbm);
+  if (quantity > 0 && cbm > 0) {
+    return String(Number((quantity * cbm).toFixed(4)));
+  }
+  return "";
 }
 
 export function CreateContainerModal({ defaultRate, investors, products }: CreateContainerModalProps) {
@@ -174,7 +185,16 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   }
 
   function updateItemRow(key: number, patch: Partial<ItemRow>) {
-    setItemRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    setItemRows((prev) =>
+      prev.map((row) => {
+        if (row.key !== key) return row;
+        const next = { ...row, ...patch };
+        if (patch.quantity !== undefined || patch.cbm !== undefined) {
+          next.totalCbm = recalcTotalCbm(next);
+        }
+        return next;
+      }),
+    );
   }
 
   function removeItemRow(key: number) {
@@ -193,7 +213,8 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
       }
       return [
         ...prev,
-        {
+        (() => {
+          const nextRow: ItemRow = {
           key: itemNextKey,
           productId: product.id,
           sizeLabel: product.size || "",
@@ -202,10 +223,13 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
           unitPriceUSD: product.costPriceUSD > 0 ? String(product.costPriceUSD) : "",
           salePriceUSD: product.basePriceUSD > 0 ? String(product.basePriceUSD) : "",
           lineTotalUSD: "",
-          cbm: "",
-          kg: "",
+          cbm: product.cbm > 0 ? String(product.cbm) : "",
+          kg: product.kg > 0 ? String(product.kg) : "",
           totalCbm: "",
-        },
+          };
+          nextRow.totalCbm = recalcTotalCbm(nextRow);
+          return nextRow;
+        })(),
       ];
     });
     setItemNextKey((value) => value + 1);

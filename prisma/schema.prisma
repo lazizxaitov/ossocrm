@@ -90,6 +90,8 @@ model Product {
   description  String?
   imagePath    String?
   costPriceUSD Float           @default(0)
+  cbm          Float?
+  kg           Float?
   basePriceUSD Float
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt

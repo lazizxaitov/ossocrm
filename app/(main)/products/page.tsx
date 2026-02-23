@@ -160,6 +160,8 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               <th className="px-3 py-2 font-medium">Категория</th>
               <th className="px-3 py-2 font-medium">Размер</th>
               <th className="px-3 py-2 font-medium">Цвет</th>
+              <th className="px-3 py-2 font-medium">CBM</th>
+              <th className="px-3 py-2 font-medium">KG</th>
               {showFinance ? <th className="px-3 py-2 font-medium">Себестоимость</th> : null}
               {showFinance ? <th className="px-3 py-2 font-medium">Цена продажи</th> : null}
               <th className="px-3 py-2 font-medium">Описание</th>
@@ -188,6 +190,8 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                 <td className="px-3 py-2 text-slate-700">{product.category?.name ?? "—"}</td>
                 <td className="px-3 py-2 text-slate-700">{product.size}</td>
                 <td className="px-3 py-2 text-slate-700">{product.color ?? "—"}</td>
+                <td className="px-3 py-2 text-slate-700">{product.cbm ? product.cbm.toFixed(4) : "—"}</td>
+                <td className="px-3 py-2 text-slate-700">{product.kg ? product.kg.toFixed(2) : "—"}</td>
                 {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(product.costPriceUSD)}</td> : null}
                 {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(product.basePriceUSD)}</td> : null}
                 <td className="px-3 py-2 text-slate-600">{product.description ?? "—"}</td>
@@ -202,6 +206,8 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                         description: product.description,
                         imagePath: product.imagePath,
                         costPriceUSD: product.costPriceUSD,
+                        cbm: product.cbm,
+                        kg: product.kg,
                         basePriceUSD: product.basePriceUSD,
                         categoryId: product.category?.id ?? null,
                       }}
@@ -218,7 +224,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               <tr>
                 <td
                   className="px-3 py-6 text-center text-slate-500"
-                  colSpan={canManage ? (showFinance ? 9 : 7) : showFinance ? 8 : 6}
+                  colSpan={canManage ? (showFinance ? 11 : 9) : showFinance ? 10 : 8}
                 >
                   Ничего не найдено.
                 </td>

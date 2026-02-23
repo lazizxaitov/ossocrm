@@ -66,6 +66,8 @@ export async function createProductAction(formData: FormData) {
   const categoryIdRaw = String(formData.get("categoryId") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const costPriceUSD = toNumber(formData.get("costPriceUSD"));
+  const cbm = toNumber(formData.get("cbm"));
+  const kg = toNumber(formData.get("kg"));
   const salePriceUSD = toNumber(formData.get("salePriceUSD"));
   const imageFile = formData.get("image");
 
@@ -94,6 +96,8 @@ export async function createProductAction(formData: FormData) {
       description: description || null,
       imagePath,
       costPriceUSD,
+      cbm: Number.isFinite(cbm) && cbm > 0 ? cbm : null,
+      kg: Number.isFinite(kg) && kg > 0 ? kg : null,
       basePriceUSD: salePriceUSD,
     },
   });
@@ -114,6 +118,8 @@ export async function updateProductAction(formData: FormData) {
   const categoryIdRaw = String(formData.get("categoryId") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const costPriceUSD = toNumber(formData.get("costPriceUSD"));
+  const cbm = toNumber(formData.get("cbm"));
+  const kg = toNumber(formData.get("kg"));
   const salePriceUSD = toNumber(formData.get("salePriceUSD"));
   const currentImagePath = String(formData.get("currentImagePath") ?? "").trim();
   const imageFile = formData.get("image");
@@ -143,6 +149,8 @@ export async function updateProductAction(formData: FormData) {
       description: description || null,
       imagePath: newImagePath ?? (currentImagePath || null),
       costPriceUSD,
+      cbm: Number.isFinite(cbm) && cbm > 0 ? cbm : null,
+      kg: Number.isFinite(kg) && kg > 0 ? kg : null,
       basePriceUSD: salePriceUSD,
     },
   });

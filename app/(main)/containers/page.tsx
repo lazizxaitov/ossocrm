@@ -22,6 +22,7 @@ export default async function ContainersPage() {
       include: {
         _count: { select: { items: true, investments: true } },
         investments: { select: { investedAmountUSD: true } },
+        items: { select: { totalCbm: true, cbm: true, quantity: true } },
       },
     }),
     prisma.currencySetting.findFirst({ orderBy: { updatedAt: "desc" } }),
@@ -35,6 +36,8 @@ export default async function ContainersPage() {
         size: true,
         imagePath: true,
         costPriceUSD: true,
+        cbm: true,
+        kg: true,
         basePriceUSD: true,
         category: { select: { name: true } },
       },
@@ -65,6 +68,8 @@ export default async function ContainersPage() {
                 size: product.size,
                 imagePath: product.imagePath,
                 costPriceUSD: product.costPriceUSD,
+                cbm: product.cbm ?? 0,
+                kg: product.kg ?? 0,
                 basePriceUSD: product.basePriceUSD,
                 categoryName: product.category?.name ?? "Без категории",
               }))}
@@ -85,12 +90,18 @@ export default async function ContainersPage() {
               <th className="px-3 py-2 font-medium">Инвестиции</th>
               <th className="px-3 py-2 font-medium">Дата</th>
               <th className="px-3 py-2 font-medium">Товары</th>
+              <th className="px-3 py-2 font-medium">TOTAL CBM</th>
               <th className="px-3 py-2 font-medium">Действия</th>
             </tr>
           </thead>
           <tbody>
             {containers.map((container) => {
               const investedTotal = container.investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
+              const totalCbm = container.items.reduce((sum, item) => {
+                if (item.totalCbm && item.totalCbm > 0) return sum + item.totalCbm;
+                if (item.cbm && item.cbm > 0 && item.quantity > 0) return sum + item.cbm * item.quantity;
+                return sum;
+              }, 0);
               const expected = container.totalPurchaseUSD + container.totalExpensesUSD;
               const mismatch = Math.abs(investedTotal - expected) >= 0.01;
 
@@ -109,6 +120,7 @@ export default async function ContainersPage() {
                   </td>
                   <td className="px-3 py-2 text-slate-600">{new Date(container.purchaseDate).toLocaleDateString("ru-RU")}</td>
                   <td className="px-3 py-2 text-slate-700">{container._count.items}</td>
+                  <td className="px-3 py-2 text-slate-700">{totalCbm > 0 ? totalCbm.toFixed(4) : "—"}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
                       <Link
@@ -132,7 +144,7 @@ export default async function ContainersPage() {
             })}
             {!containers.length ? (
               <tr>
-                <td className="px-3 py-6 text-center text-slate-500" colSpan={showFinance ? 9 : 6}>
+                <td className="px-3 py-6 text-center text-slate-500" colSpan={showFinance ? 10 : 7}>
                   Контейнеры пока не созданы.
                 </td>
               </tr>

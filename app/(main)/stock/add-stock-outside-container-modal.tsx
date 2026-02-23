@@ -41,6 +41,15 @@ function toNumber(value: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function recalcTotalCbm(row: ItemRow) {
+  const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+  const cbm = toNumber(row.cbm);
+  if (quantity > 0 && cbm > 0) {
+    return String(Number((quantity * cbm).toFixed(4)));
+  }
+  return "";
+}
+
 export function AddStockOutsideContainerModal({ products }: AddStockOutsideContainerModalProps) {
   const [open, setOpen] = useState(false);
   const initialState: AddStockOutsideContainerState = { error: null, success: null };
@@ -128,7 +137,8 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
       }
       return [
         ...prev,
-        {
+        (() => {
+          const nextRow: ItemRow = {
           key: nextKey,
           productId: product.id,
           quantity: "1",
@@ -140,7 +150,10 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
           cbm: "",
           kg: "",
           totalCbm: "",
-        },
+          };
+          nextRow.totalCbm = recalcTotalCbm(nextRow);
+          return nextRow;
+        })(),
       ];
     });
     setNextKey((value) => value + 1);
@@ -153,7 +166,16 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
   }
 
   function updateRow(key: number, patch: Partial<ItemRow>) {
-    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    setRows((prev) =>
+      prev.map((row) => {
+        if (row.key !== key) return row;
+        const next = { ...row, ...patch };
+        if (patch.quantity !== undefined || patch.cbm !== undefined) {
+          next.totalCbm = recalcTotalCbm(next);
+        }
+        return next;
+      }),
+    );
   }
 
   function removeRow(key: number) {
