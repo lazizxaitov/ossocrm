@@ -100,6 +100,12 @@ export default async function ContainerDetailPage({ params }: ContainerDetailPag
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href={`/api/containers/${container.id}/export`}
+              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Экспорт в Excel
+            </Link>
             {canManage ? (
               <AddItemModal
                 containerId={container.id}

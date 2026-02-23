@@ -45,14 +45,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const containerId = params.containerId && params.containerId !== "all" ? params.containerId : undefined;
   const { from, to } = resolveDateRange(range, params.from, params.to);
 
-  const [currentPeriod, kpi, containerRows, debtRows, profitChart, containers] = await Promise.all([
+  const [currentPeriod, kpi, containerRows, debtRows, profitChart, containers, control] = await Promise.all([
     getCurrentFinancialPeriod(),
     computeKpis({ from, to, containerId }),
     buildContainerRows(from, to),
     buildDebtRows(),
     buildMonthlyProfitChart(),
     prisma.container.findMany({ select: { id: true, name: true }, orderBy: { createdAt: "desc" } }),
+    prisma.systemControl.findUnique({ where: { id: 1 }, select: { serverTimeOffsetMinutes: true } }),
   ]);
+  const idleLimitMinutes = Math.max(1, control?.serverTimeOffsetMinutes ?? 10);
   const checklist = await buildMonthCloseChecklistForPeriod(currentPeriod.id);
   const salesByContainer = containerRows.slice(0, 8).map((row) => ({ label: row.name, value: row.sold }));
   const debtChart = debtRows.slice(0, 8).map((row) => ({ label: row.client, value: row.debt }));
@@ -218,7 +220,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </article>
       </div>
-      <AutoLogoutTimer />
+      <AutoLogoutTimer idleLimitMinutes={idleLimitMinutes} />
     </section>
   );
 }

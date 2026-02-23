@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
+import { Role } from "@prisma/client";
 import { updateCurrencySettingAction } from "@/app/(main)/settings/actions";
 import { getRequiredSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { SETTINGS_ROLES } from "@/lib/rbac";
 
 export default async function CurrencySettingsPage() {
   const session = await getRequiredSession();
-  if (!SETTINGS_ROLES.includes(session.role)) {
+  if (session.role !== Role.SUPER_ADMIN) {
     redirect("/dashboard");
   }
 

@@ -11,8 +11,8 @@ import { SETTINGS_ROLES } from "@/lib/rbac";
 
 export async function updateCurrencySettingAction(formData: FormData) {
   const session = await getRequiredSession();
-  if (!SETTINGS_ROLES.includes(session.role)) {
-    throw new Error("Недостаточно прав для изменения курса.");
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Изменение курса доступно только SUPER_ADMIN.");
   }
 
   const rate = toNumber(formData.get("cnyToUsdRate"));
@@ -181,8 +181,8 @@ function assertRoleManagePermissions(currentRole: Role, targetRole: Role) {
 
 export async function createUserAction(formData: FormData) {
   const session = await getRequiredSession();
-  if (!SETTINGS_ROLES.includes(session.role)) {
-    throw new Error("Недостаточно прав для создания пользователя.");
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Создание пользователя доступно только SUPER_ADMIN.");
   }
 
   const name = String(formData.get("name") ?? "").trim();
@@ -196,8 +196,6 @@ export async function createUserAction(formData: FormData) {
   if (password.length < 6) {
     throw new Error("Минимальная длина пароля: 6 символов.");
   }
-
-  assertRoleManagePermissions(session.role as Role, role);
 
   const exists = await prisma.user.findUnique({ where: { login } });
   if (exists) {
@@ -220,8 +218,8 @@ export async function createUserAction(formData: FormData) {
 
 export async function updateUserAccessAction(formData: FormData) {
   const session = await getRequiredSession();
-  if (!SETTINGS_ROLES.includes(session.role)) {
-    throw new Error("Недостаточно прав для изменения пользователя.");
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Изменение пользователей доступно только SUPER_ADMIN.");
   }
 
   const userId = String(formData.get("userId") ?? "");
@@ -240,14 +238,7 @@ export async function updateUserAccessAction(formData: FormData) {
     throw new Error("Пользователь не найден.");
   }
 
-  if (session.role === Role.ADMIN && target.role === Role.SUPER_ADMIN) {
-    throw new Error("Администратор не может изменять SUPER_ADMIN.");
-  }
   assertRoleManagePermissions(session.role as Role, role);
-
-  if (session.role === Role.ADMIN && session.userId === userId && role !== Role.ADMIN) {
-    throw new Error("Администратор не может понизить свою роль.");
-  }
 
   const loginOwner = await prisma.user.findUnique({ where: { login } });
   if (loginOwner && loginOwner.id !== userId) {
@@ -280,4 +271,38 @@ export async function updateUserAccessAction(formData: FormData) {
   });
 
   revalidatePath("/settings");
+}
+
+export async function updateAutoLogoutTimerAction(formData: FormData) {
+  const session = await getRequiredSession();
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Изменение таймера автовыхода доступно только SUPER_ADMIN.");
+  }
+
+  const minutesRaw = String(formData.get("autoLogoutMinutes") ?? "").trim();
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 240) {
+    throw new Error("Укажите таймер от 1 до 240 минут.");
+  }
+
+  await prisma.systemControl.upsert({
+    where: { id: 1 },
+    update: {
+      serverTimeOffsetMinutes: Math.floor(minutes),
+    },
+    create: {
+      id: 1,
+      lastBackupAt: new Date(),
+      inventoryCheckedAt: null,
+      warehouseDiscrepancyCount: 0,
+      plannedMonthlyExpensesUSD: 0,
+      serverTimeOffsetMinutes: Math.floor(minutes),
+      serverTimeAuto: true,
+      serverTimeZone: "UTC",
+      manualSystemTime: null,
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
 }

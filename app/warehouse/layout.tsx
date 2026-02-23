@@ -2,6 +2,7 @@
 import { logoutAction } from "@/app/login/actions";
 import { redirect } from "next/navigation";
 import { roleLabel } from "@/lib/rbac";
+import Image from "next/image";
 import { WarehousePwaRegister } from "@/app/warehouse/pwa-register";
 
 export default async function WarehouseLayout({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,15 @@ export default async function WarehouseLayout({ children }: { children: React.Re
       <main className="mx-auto max-w-5xl">
         <header className="mb-4 flex flex-col gap-3 rounded-3xl border border-[#c9d6ea] bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] md:mb-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Складской режим OSSO</h1>
+            <Image
+              src="/osso-logo-transparent.png"
+              alt="OSSO"
+              width={150}
+              height={46}
+              className="h-10 w-auto object-contain"
+              priority
+            />
+            <h1 className="text-xl font-semibold text-slate-900">Складской режим</h1>
             <p className="text-sm text-slate-600">
               Пользователь: {session.name} ({roleLabel(session.role)})
             </p>

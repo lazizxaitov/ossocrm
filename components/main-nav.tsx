@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -197,7 +198,14 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
             ) : null}
           </div>
 
-          <p className="text-sm font-semibold text-slate-800">OSSO</p>
+          <Image
+            src="/osso-logo-transparent.png"
+            alt="OSSO"
+            width={110}
+            height={34}
+            className="h-8 w-auto object-contain"
+            priority
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

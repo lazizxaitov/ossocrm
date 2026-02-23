@@ -1,42 +1,12 @@
-#!/usr/bin/env bash
-set -euo pipefail
+Prisma schema loaded from prisma/schema.prisma
+Error: Prisma schema validation - (get-config wasm)
+Error code: P1012
+error: Environment variable not found: DATABASE_URL.
+  -->  prisma/schema.prisma:7
+   | 
+ 6 |   provider = "sqlite"
+ 7 |   url      = env("DATABASE_URL")
+   | 
 
-APP_DIR="/var/www/osso"
-APP_NAME="osso"
-
-echo "==> Deploy start: $(date)"
-cd "$APP_DIR"
-
-if [ ! -f ".env.production" ]; then
-  echo "ERROR: .env.production not found in $APP_DIR"
-  exit 1
-fi
-
-echo "==> Pull latest code"
-git fetch --all --prune
-if git show-ref --verify --quiet refs/remotes/origin/main; then
-  TARGET_BRANCH="main"
-elif git show-ref --verify --quiet refs/remotes/origin/master; then
-  TARGET_BRANCH="master"
-else
-  TARGET_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-fi
-echo "==> Deploy branch: $TARGET_BRANCH"
-git reset --hard "origin/$TARGET_BRANCH"
-
-echo "==> Install dependencies"
-npm ci
-
-echo "==> Prisma generate + migrate"
-npx prisma generate
-npx prisma migrate deploy
-
-echo "==> Clean Next cache and build"
-rm -rf .next
-npm run build
-
-echo "==> Restart app via PM2"
-pm2 startOrReload ecosystem.config.cjs --env production
-pm2 save
-
-echo "==> Deploy done: $(date)"
+Validation Error Count: 1
+[Context: getConfig]

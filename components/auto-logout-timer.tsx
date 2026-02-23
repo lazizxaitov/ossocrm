@@ -2,24 +2,31 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const IDLE_LIMIT_SECONDS = 10 * 60;
-
 function formatTime(seconds: number) {
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
   const ss = String(seconds % 60).padStart(2, "0");
   return `${mm}:${ss}`;
 }
 
-export function AutoLogoutTimer() {
-  const [remaining, setRemaining] = useState(IDLE_LIMIT_SECONDS);
+type AutoLogoutTimerProps = {
+  idleLimitMinutes?: number;
+};
+
+export function AutoLogoutTimer({ idleLimitMinutes = 10 }: AutoLogoutTimerProps) {
+  const idleLimitSeconds = Math.max(60, Math.floor(idleLimitMinutes * 60));
+  const [remaining, setRemaining] = useState(idleLimitSeconds);
   const [paused, setPaused] = useState(false);
-  const deadlineRef = useRef(Date.now() + IDLE_LIMIT_SECONDS * 1000);
+  const deadlineRef = useRef(Date.now() + idleLimitSeconds * 1000);
   const loggingOutRef = useRef(false);
 
   function resetTimer() {
-    deadlineRef.current = Date.now() + IDLE_LIMIT_SECONDS * 1000;
-    setRemaining(IDLE_LIMIT_SECONDS);
+    deadlineRef.current = Date.now() + idleLimitSeconds * 1000;
+    setRemaining(idleLimitSeconds);
   }
+
+  useEffect(() => {
+    resetTimer();
+  }, [idleLimitSeconds]);
 
   useEffect(() => {
     const events: Array<keyof WindowEventMap> = ["mousemove", "keydown", "click", "scroll", "touchstart"];
@@ -37,7 +44,7 @@ export function AutoLogoutTimer() {
         window.removeEventListener(eventName, onActivity);
       }
     };
-  }, []);
+  }, [idleLimitSeconds]);
 
   useEffect(() => {
     function isFormEditingTarget(target: EventTarget | null) {
@@ -96,7 +103,7 @@ export function AutoLogoutTimer() {
       className={`fixed bottom-3 left-3 z-50 rounded-lg border px-3 py-2 text-xs shadow-md ${
         danger ? "border-rose-300 bg-rose-50 text-rose-700" : "border-[var(--border)] bg-white text-slate-700"
       }`}
-      title="Автовыход при бездействии через 10 минут"
+      title={`Автовыход при бездействии через ${Math.floor(idleLimitSeconds / 60)} минут`}
     >
       {paused ? (
         <>

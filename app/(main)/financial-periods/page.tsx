@@ -143,7 +143,19 @@ export default async function FinancialPeriodsPage({ searchParams }: FinancialPe
                       href={`/api/financial-periods/${period.id}/report`}
                       className="rounded border border-[var(--border)] px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      Отчет
+                      CSV
+                    </Link>
+                    <Link
+                      href={`/api/financial-periods/${period.id}/report/word`}
+                      className="rounded border border-[var(--border)] px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Word
+                    </Link>
+                    <Link
+                      href={`/api/financial-periods/${period.id}/report/pdf`}
+                      className="rounded border border-[var(--border)] px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      PDF
                     </Link>
                   </div>
                 </td>
