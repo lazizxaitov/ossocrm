@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { CreateProductModal } from "@/app/(main)/products/create-product-modal";
@@ -32,6 +32,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
         OR: [
           { name: { contains: q } },
           { size: { contains: q } },
+          { color: { contains: q } },
           { category: { name: { contains: q } } },
         ],
       }
@@ -97,7 +98,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
           <input
             name="q"
             defaultValue={q}
-            placeholder="Поиск по названию, категории или размеру"
+            placeholder="Поиск по названию, категории, размеру, цвету"
             className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
           />
           <button
@@ -157,6 +158,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               <th className="px-3 py-2 font-medium">Название</th>
               <th className="px-3 py-2 font-medium">Категория</th>
               <th className="px-3 py-2 font-medium">Размер</th>
+              <th className="px-3 py-2 font-medium">Цвет</th>
               {showFinance ? <th className="px-3 py-2 font-medium">Себестоимость</th> : null}
               {showFinance ? <th className="px-3 py-2 font-medium">Цена продажи</th> : null}
               <th className="px-3 py-2 font-medium">Описание</th>
@@ -168,7 +170,11 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               <tr key={product.id} className="border-t border-[var(--border)] align-top">
                 <td className="px-3 py-2">
                   {product.imagePath ? (
-                    <Image src={product.imagePath} alt={product.name} width={40} height={40}
+                    <Image
+                      src={product.imagePath}
+                      alt={product.name}
+                      width={40}
+                      height={40}
                       className="h-10 w-10 rounded-md border border-[var(--border)] object-cover"
                     />
                   ) : (
@@ -180,6 +186,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                 <td className="px-3 py-2 text-slate-800">{product.name}</td>
                 <td className="px-3 py-2 text-slate-700">{product.category?.name ?? "—"}</td>
                 <td className="px-3 py-2 text-slate-700">{product.size}</td>
+                <td className="px-3 py-2 text-slate-700">{product.color ?? "—"}</td>
                 {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(product.costPriceUSD)}</td> : null}
                 {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(product.basePriceUSD)}</td> : null}
                 <td className="px-3 py-2 text-slate-600">{product.description ?? "—"}</td>
@@ -190,6 +197,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
                         id: product.id,
                         name: product.name,
                         size: product.size,
+                        color: product.color,
                         description: product.description,
                         imagePath: product.imagePath,
                         costPriceUSD: product.costPriceUSD,
@@ -208,7 +216,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               <tr>
                 <td
                   className="px-3 py-6 text-center text-slate-500"
-                  colSpan={canManage ? (showFinance ? 8 : 6) : showFinance ? 7 : 5}
+                  colSpan={canManage ? (showFinance ? 9 : 7) : showFinance ? 8 : 6}
                 >
                   Ничего не найдено.
                 </td>

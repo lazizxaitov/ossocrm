@@ -9,22 +9,9 @@ import { toNumber } from "@/lib/currency";
 import { assertOpenPeriodForDate } from "@/lib/financial-period";
 import { prisma } from "@/lib/prisma";
 import { PRODUCTS_MANAGE_ROLES } from "@/lib/rbac";
+import { generateUniqueProductSku } from "@/lib/sku";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-
-function buildSku(name: string, size: string) {
-  const n = name
-    .toUpperCase()
-    .replace(/[^A-Z0-9А-ЯЁ]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 16);
-  const s = size
-    .toUpperCase()
-    .replace(/[^A-Z0-9А-ЯЁ]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 12);
-  return `${n || "ITEM"}-${s || "SIZE"}-${Date.now().toString().slice(-6)}`;
-}
 
 function safeImageExt(file: File) {
   const extByType: Record<string, string> = {
@@ -75,6 +62,7 @@ export async function createProductAction(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const size = String(formData.get("size") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
   const categoryIdRaw = String(formData.get("categoryId") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const costPriceUSD = toNumber(formData.get("costPriceUSD"));
@@ -94,13 +82,15 @@ export async function createProductAction(formData: FormData) {
 
   await assertOpenPeriodForDate(new Date());
   const imagePath = imageFile instanceof File ? await saveProductImage(imageFile) : null;
+  const sku = await generateUniqueProductSku();
 
   await prisma.product.create({
     data: {
       name,
       categoryId: categoryIdRaw || null,
       size,
-      sku: buildSku(name, size),
+      color: color || null,
+      sku,
       description: description || null,
       imagePath,
       costPriceUSD,
@@ -120,6 +110,7 @@ export async function updateProductAction(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const size = String(formData.get("size") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
   const categoryIdRaw = String(formData.get("categoryId") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const costPriceUSD = toNumber(formData.get("costPriceUSD"));
@@ -148,6 +139,7 @@ export async function updateProductAction(formData: FormData) {
       name,
       categoryId: categoryIdRaw || null,
       size,
+      color: color || null,
       description: description || null,
       imagePath: newImagePath ?? (currentImagePath || null),
       costPriceUSD,

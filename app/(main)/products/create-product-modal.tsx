@@ -252,6 +252,12 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
               <input type="hidden" name="size" value={selectedSize} />
 
               <input
+                name="color"
+                placeholder="Цвет (необязательно)"
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
+
+              <input
                 name="costPriceUSD"
                 type="number"
                 min="0.01"

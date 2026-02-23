@@ -85,6 +85,7 @@ model Product {
   categoryId   String?
   category     ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   size         String          @default("Без размера")
+  color        String?
   sku          String          @unique
   description  String?
   imagePath    String?

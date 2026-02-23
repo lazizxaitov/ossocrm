@@ -20,6 +20,7 @@ type EditProductModalProps = {
     id: string;
     name: string;
     size: string;
+    color: string | null;
     description: string | null;
     imagePath: string | null;
     costPriceUSD: number;
@@ -105,6 +106,13 @@ export function EditProductModal({ product, categories, existingSizes, showFinan
                 options={sizeOptions}
               />
               <input type="hidden" name="size" value={selectedSize} />
+
+              <input
+                name="color"
+                defaultValue={product.color ?? ""}
+                placeholder="Цвет (необязательно)"
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              />
 
               {showFinance ? (
                 <>
