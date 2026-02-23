@@ -82,3 +82,20 @@ body {
   padding-right: 2rem;
   animation: ossoMarquee 8s linear infinite;
 }
+
+@media (max-width: 767px) {
+  article.overflow-hidden,
+  article.overflow-visible,
+  div.overflow-hidden,
+  div.overflow-visible {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  article.overflow-hidden > table,
+  article.overflow-visible > table,
+  div.overflow-hidden > table,
+  div.overflow-visible > table {
+    min-width: 720px;
+  }
+}
