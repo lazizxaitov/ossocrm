@@ -22,6 +22,7 @@ export async function GET(_: Request, { params }: RouteParams) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
   const logoBytes = await getBrandLogoBytes(true);
   let logoImage: Awaited<ReturnType<typeof pdf.embedPng>> | null = null;
   if (logoBytes) {
@@ -41,12 +42,18 @@ export async function GET(_: Request, { params }: RouteParams) {
     y = 805;
   };
 
-  const drawText = (text: string, size = 10, isBold = false, color = rgb(0.12, 0.15, 0.2)) => {
-    ensurePage(size + 6);
+  const drawAtSafe = (
+    x: number,
+    yy: number,
+    text: string,
+    size = 10,
+    isBold = false,
+    color = rgb(0.12, 0.15, 0.2),
+  ) => {
     const drawRaw = (value: string) =>
       page.drawText(value, {
-        x: 36,
-        y,
+        x,
+        y: yy,
         size,
         font: isBold ? bold : regular,
         color,
@@ -56,10 +63,13 @@ export async function GET(_: Request, { params }: RouteParams) {
     try {
       drawRaw(text);
     } catch {
-      // Fallback avoids HTTP 500 when unsupported glyphs are present.
-      const safe = text.replace(/[^\x20-\x7E]/g, " ");
-      drawRaw(safe);
+      drawRaw(text.replace(/[^\x20-\x7E]/g, " "));
     }
+  };
+
+  const drawText = (text: string, size = 10, isBold = false, color = rgb(0.12, 0.15, 0.2)) => {
+    ensurePage(size + 6);
+    drawAtSafe(36, y, text, size, isBold, color);
     y -= size + 6;
   };
 
@@ -79,6 +89,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     borderWidth: 1,
     color: rgb(0.97, 0.98, 1),
   });
+
   if (logoImage) {
     const targetWidth = 86;
     const scale = targetWidth / logoImage.width;
@@ -89,120 +100,84 @@ export async function GET(_: Request, { params }: RouteParams) {
       height: logoImage.height * scale,
     });
   } else {
-    page.drawText("OSSO", {
-      x: 44,
-      y: 792,
-      size: 24,
-      font: bold,
-      color: rgb(0.05, 0.12, 0.25),
-    });
+    drawAtSafe(44, 792, "OSSO", 24, true, rgb(0.05, 0.12, 0.25));
   }
-  page.drawText("Финансовая система учета и аналитики", {
-    x: 44,
-    y: 774,
-    size: 9,
-    font: regular,
-    color: rgb(0.25, 0.33, 0.45),
-  });
-  page.drawText("УТВЕРЖДЕНО", {
-    x: 390,
-    y: 794,
-    size: 9,
-    font: bold,
-    color: rgb(0.1, 0.15, 0.25),
-  });
-  page.drawText("Руководитель: ____________", {
-    x: 390,
-    y: 779,
-    size: 8.5,
-    font: regular,
-    color: rgb(0.2, 0.25, 0.35),
-  });
-  page.drawText("Дата: ____________", {
-    x: 390,
-    y: 766,
-    size: 8.5,
-    font: regular,
-    color: rgb(0.2, 0.25, 0.35),
-  });
-  page.drawText("Подпись: ____________", {
-    x: 390,
-    y: 753,
-    size: 8.5,
-    font: regular,
-    color: rgb(0.2, 0.25, 0.35),
-  });
+
+  drawAtSafe(44, 774, "Financial accounting and analytics system", 9, false, rgb(0.25, 0.33, 0.45));
+  drawAtSafe(390, 794, "APPROVED", 9, true, rgb(0.1, 0.15, 0.25));
+  drawAtSafe(390, 779, "Director: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
+  drawAtSafe(390, 766, "Date: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
+  drawAtSafe(390, 753, "Signature: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
   y = 728;
 
-  drawText(`Отчет по финансовому периоду ${periodLabel}`, 16, true);
-  drawText(`Статус: ${report.period.status}`, 10);
+  drawText(`Period report ${periodLabel}`, 16, true);
+  drawText(`Status: ${report.period.status}`);
   drawText(
-    `Диапазон: ${report.range.from.toLocaleDateString("ru-RU")} - ${report.range.to.toLocaleDateString("ru-RU")}`,
-    10,
+    `Range: ${report.range.from.toLocaleDateString("ru-RU")} - ${report.range.to.toLocaleDateString("ru-RU")}`,
   );
 
   drawSectionTitle("KPI");
-  drawText(`Выручка: ${report.kpi.revenue.toFixed(2)} USD`);
-  drawText(`Себестоимость: ${report.kpi.cogs.toFixed(2)} USD`);
-  drawText(`Расходы: ${report.kpi.expenses.toFixed(2)} USD`);
-  drawText(`Чистая прибыль: ${report.kpi.netProfit.toFixed(2)} USD`);
-  drawText(`Долги: ${report.kpi.debtTotal.toFixed(2)} USD`);
-  drawText(`Доступно к выплате инвесторам: ${report.kpi.availableToPayout.toFixed(2)} USD`);
+  drawText(`Revenue: ${report.kpi.revenue.toFixed(2)} USD`);
+  drawText(`COGS: ${report.kpi.cogs.toFixed(2)} USD`);
+  drawText(`Expenses: ${report.kpi.expenses.toFixed(2)} USD`);
+  drawText(`Net profit: ${report.kpi.netProfit.toFixed(2)} USD`);
+  drawText(`Debt: ${report.kpi.debtTotal.toFixed(2)} USD`);
+  drawText(`Available to payout: ${report.kpi.availableToPayout.toFixed(2)} USD`);
 
-  drawSectionTitle("Сводка");
-  drawText(`Продаж: ${report.summary.salesCount}`);
-  drawText(`Продаж COMPLETED: ${report.summary.completedSales}`);
-  drawText(`Продаж PARTIALLY_PAID: ${report.summary.partialSales}`);
-  drawText(`Продаж DEBT: ${report.summary.debtSales}`);
-  drawText(`Просроченных долгов: ${report.summary.overdueDebtCount}`);
-  drawText(`Сумма просроченного долга: ${report.summary.overdueDebtAmount.toFixed(2)} USD`);
-  drawText(`Расходов: ${report.summary.expensesCount}`);
-  drawText(`Корректировки расходов: ${report.summary.totalCorrectionsUSD.toFixed(2)} USD`);
-  drawText(`Выплат инвесторам: ${report.summary.payoutsCount}`);
-  drawText(`Инвентаризаций: ${report.summary.inventorySessionsCount}`);
-  drawText(`Инвентаризаций с расхождениями: ${report.summary.discrepancySessionsCount}`);
-  drawText(`Контейнеров в операциях: ${report.summary.containersInvolved}`);
+  drawSectionTitle("Summary");
+  drawText(`Sales: ${report.summary.salesCount}`);
+  drawText(`Completed sales: ${report.summary.completedSales}`);
+  drawText(`Partially paid sales: ${report.summary.partialSales}`);
+  drawText(`Debt sales: ${report.summary.debtSales}`);
+  drawText(`Overdue debts: ${report.summary.overdueDebtCount}`);
+  drawText(`Overdue amount: ${report.summary.overdueDebtAmount.toFixed(2)} USD`);
+  drawText(`Expenses count: ${report.summary.expensesCount}`);
+  drawText(`Expense corrections: ${report.summary.totalCorrectionsUSD.toFixed(2)} USD`);
+  drawText(`Investor payouts: ${report.summary.payoutsCount}`);
+  drawText(`Inventory sessions: ${report.summary.inventorySessionsCount}`);
+  drawText(`Sessions with discrepancy: ${report.summary.discrepancySessionsCount}`);
+  drawText(`Containers involved: ${report.summary.containersInvolved}`);
 
-  drawSectionTitle("Продажи");
-  if (report.sales.length === 0) {
-    drawText("Нет данных.");
+  drawSectionTitle("Sales");
+  if (!report.sales.length) {
+    drawText("No data.");
   } else {
     for (const row of report.sales) {
       drawText(
-        `${row.invoiceNumber} | ${row.createdAt.toLocaleDateString("ru-RU")} | ${row.clientName} | ${row.status} | Итого ${row.totalAmountUSD.toFixed(2)} | Оплачено ${row.paidAmountUSD.toFixed(2)} | Долг ${row.debtAmountUSD.toFixed(2)}`
+        `${row.invoiceNumber} | ${row.createdAt.toLocaleDateString("ru-RU")} | ${row.clientName} | ${row.status} | Total ${row.totalAmountUSD.toFixed(2)} | Paid ${row.paidAmountUSD.toFixed(2)} | Debt ${row.debtAmountUSD.toFixed(2)}`,
       );
     }
   }
 
-  drawSectionTitle("Расходы контейнеров");
-  if (report.expenses.length === 0) {
-    drawText("Нет данных.");
+  drawSectionTitle("Container expenses");
+  if (!report.expenses.length) {
+    drawText("No data.");
   } else {
     for (const row of report.expenses) {
       drawText(
-        `${row.createdAt.toLocaleDateString("ru-RU")} | ${row.containerName} | ${row.category} | ${row.title} | ${row.amountUSD.toFixed(2)} + ${row.correctionSumUSD.toFixed(2)} = ${row.finalAmountUSD.toFixed(2)}`
+        `${row.createdAt.toLocaleDateString("ru-RU")} | ${row.containerName} | ${row.category} | ${row.title} | ${row.amountUSD.toFixed(2)} + ${row.correctionSumUSD.toFixed(2)} = ${row.finalAmountUSD.toFixed(2)}`,
       );
     }
   }
 
-  drawSectionTitle("Выплаты инвесторам");
-  if (report.payouts.length === 0) {
-    drawText("Нет данных.");
+  drawSectionTitle("Investor payouts");
+  if (!report.payouts.length) {
+    drawText("No data.");
   } else {
     for (const row of report.payouts) {
       drawText(
-        `${row.payoutDate.toLocaleDateString("ru-RU")} | ${row.investorName} | ${row.containerName} | ${row.amountUSD.toFixed(2)} USD`
+        `${row.payoutDate.toLocaleDateString("ru-RU")} | ${row.investorName} | ${row.containerName} | ${row.amountUSD.toFixed(2)} USD`,
       );
     }
   }
 
-  drawSectionTitle("Инвентаризации");
-  if (report.inventory.length === 0) {
-    drawText("Нет данных.");
+  drawSectionTitle("Inventory");
+  if (!report.inventory.length) {
+    drawText("No data.");
   } else {
     for (const row of report.inventory) {
       drawText(
-        `${row.createdAt.toLocaleDateString("ru-RU")} | ${row.title} | ${row.status} | Расхождения: ${row.discrepancyCount}`,
+        `${row.createdAt.toLocaleDateString("ru-RU")} | ${row.title} | ${row.status} | Diff: ${row.discrepancyCount}`,
       );
     }
   }
@@ -221,20 +196,8 @@ export async function GET(_: Request, { params }: RouteParams) {
     thickness: 0.8,
     color: rgb(0.55, 0.6, 0.68),
   });
-  page.drawText("Руководитель", {
-    x: 36,
-    y: y - 14,
-    size: 9,
-    font: regular,
-    color: rgb(0.3, 0.35, 0.45),
-  });
-  page.drawText("Главный бухгалтер", {
-    x: 320,
-    y: y - 14,
-    size: 9,
-    font: regular,
-    color: rgb(0.3, 0.35, 0.45),
-  });
+  drawAtSafe(36, y - 14, "Director", 9, false, rgb(0.3, 0.35, 0.45));
+  drawAtSafe(320, y - 14, "Chief accountant", 9, false, rgb(0.3, 0.35, 0.45));
 
   const bytes = await pdf.save();
   const fileName = `period-${report.period.year}-${String(report.period.month).padStart(2, "0")}.pdf`;
