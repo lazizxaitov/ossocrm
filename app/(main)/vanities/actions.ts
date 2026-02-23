@@ -7,20 +7,7 @@ import { toNumber } from "@/lib/currency";
 import { assertOpenPeriodForDate } from "@/lib/financial-period";
 import { prisma } from "@/lib/prisma";
 import { PRODUCTS_MANAGE_ROLES } from "@/lib/rbac";
-
-function buildSku(model: string, size: string) {
-  const m = model
-    .toUpperCase()
-    .replace(/[^A-Z0-9А-ЯЁ]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 16);
-  const s = size
-    .toUpperCase()
-    .replace(/[^A-Z0-9А-ЯЁ]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 12);
-  return `VANITY-${m || "MODEL"}-${s || "SIZE"}-${Date.now().toString().slice(-6)}`;
-}
+import { generateUniqueProductSku } from "@/lib/sku";
 
 export async function createVanityAction(formData: FormData) {
   const session = await getRequiredSession();
@@ -46,6 +33,7 @@ export async function createVanityAction(formData: FormData) {
   }
 
   await assertOpenPeriodForDate(new Date());
+  const sku = await generateUniqueProductSku();
 
   const vanityCategory = await prisma.productCategory.upsert({
     where: { name: "Тумбы" },
@@ -61,7 +49,7 @@ export async function createVanityAction(formData: FormData) {
     data: {
       name: model,
       size,
-      sku: buildSku(model, size),
+      sku,
       categoryId: vanityCategory.id,
       description: description || null,
       costPriceUSD,
