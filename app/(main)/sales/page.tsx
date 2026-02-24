@@ -1,6 +1,7 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CreateSaleModal } from "@/app/(main)/sales/create-sale-modal";
+import { DeleteSaleButton } from "@/app/(main)/sales/delete-sale-button";
 import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
 import { getCurrentFinancialPeriod } from "@/lib/financial-period";
@@ -27,11 +28,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
     prisma.sale.findMany({
       where: q
         ? {
-            OR: [
-              { invoiceNumber: { contains: q } },
-              { id: { contains: q } },
-              { client: { name: { contains: q } } },
-            ],
+            OR: [{ invoiceNumber: { contains: q } }, { id: { contains: q } }, { client: { name: { contains: q } } }],
           }
         : undefined,
       orderBy: { createdAt: "desc" },
@@ -147,12 +144,17 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                 <td className="px-3 py-2 text-slate-700">{ruStatus(sale.status)}</td>
                 <td className="px-3 py-2 text-slate-600">{new Date(sale.createdAt).toLocaleString("ru-RU")}</td>
                 <td className="px-3 py-2">
-                  <Link
-                    href={`/sales/${sale.id}`}
-                    className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Открыть
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/sales/${sale.id}`}
+                      className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Открыть
+                    </Link>
+                    {session.role === "SUPER_ADMIN" ? (
+                      <DeleteSaleButton saleId={sale.id} invoiceNumber={sale.invoiceNumber} />
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}

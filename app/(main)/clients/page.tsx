@@ -48,17 +48,45 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     ? await prisma.sale.findMany({
         where: { clientId: { in: clientIds } },
         select: {
+          id: true,
           clientId: true,
+          createdAt: true,
+          invoiceNumber: true,
           totalAmountUSD: true,
           paidAmountUSD: true,
           debtAmountUSD: true,
         },
       })
     : [];
+  const returnsByClient = clientIds.length
+    ? await prisma.return.findMany({
+        where: { sale: { clientId: { in: clientIds } } },
+        select: {
+          id: true,
+          returnNumber: true,
+          createdAt: true,
+          totalReturnUSD: true,
+          sale: {
+            select: {
+              invoiceNumber: true,
+              clientId: true,
+            },
+          },
+        },
+      })
+    : [];
 
   const statsByClient = new Map<
     string,
-    { purchasesCount: number; totalPurchases: number; totalPaid: number; totalDebt: number }
+    {
+      purchasesCount: number;
+      totalPurchases: number;
+      totalPaid: number;
+      totalDebt: number;
+      returnsCount: number;
+      totalReturns: number;
+      historyItems: Array<{ id: string; at: string; action: string; details: string; timestamp: number }>;
+    }
   >();
   for (const sale of salesByClient) {
     const current = statsByClient.get(sale.clientId) ?? {
@@ -66,12 +94,46 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
       totalPurchases: 0,
       totalPaid: 0,
       totalDebt: 0,
+      returnsCount: 0,
+      totalReturns: 0,
+      historyItems: [],
     };
     current.purchasesCount += 1;
     current.totalPurchases += sale.totalAmountUSD;
     current.totalPaid += sale.paidAmountUSD;
     current.totalDebt += sale.debtAmountUSD;
+    current.historyItems.push({
+      id: `sale-${sale.id}`,
+      timestamp: sale.createdAt.getTime(),
+      at: sale.createdAt.toLocaleString("ru-RU"),
+      action: "Продажа",
+      details: `Счет ${sale.invoiceNumber}, сумма ${formatUsd(sale.totalAmountUSD)}`,
+    });
     statsByClient.set(sale.clientId, current);
+  }
+  for (const ret of returnsByClient) {
+    const current = statsByClient.get(ret.sale.clientId) ?? {
+      purchasesCount: 0,
+      totalPurchases: 0,
+      totalPaid: 0,
+      totalDebt: 0,
+      returnsCount: 0,
+      totalReturns: 0,
+      historyItems: [],
+    };
+    current.returnsCount += 1;
+    current.totalReturns += ret.totalReturnUSD;
+    current.historyItems.push({
+      id: `ret-${ret.id}`,
+      timestamp: ret.createdAt.getTime(),
+      at: ret.createdAt.toLocaleString("ru-RU"),
+      action: "Возврат",
+      details: `Возврат ${ret.returnNumber}, счет ${ret.sale.invoiceNumber}, сумма ${formatUsd(ret.totalReturnUSD)}`,
+    });
+    statsByClient.set(ret.sale.clientId, current);
+  }
+  for (const row of statsByClient.values()) {
+    row.historyItems = row.historyItems.sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -135,6 +197,9 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
                 totalPurchases: 0,
                 totalPaid: 0,
                 totalDebt: 0,
+                returnsCount: 0,
+                totalReturns: 0,
+                historyItems: [],
               };
               return (
                 <tr key={client.id} className="border-t border-[var(--border)] align-top">
@@ -158,6 +223,14 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
                       totalPurchasesLabel={formatUsd(stat.totalPurchases)}
                       totalPaidLabel={formatUsd(stat.totalPaid)}
                       totalDebtLabel={formatUsd(stat.totalDebt)}
+                      returnsCount={stat.returnsCount}
+                      totalReturnsLabel={formatUsd(stat.totalReturns)}
+                      historyItems={stat.historyItems.map((item) => ({
+                        id: item.id,
+                        at: item.at,
+                        action: item.action,
+                        details: item.details,
+                      }))}
                     />
                   </td>
                   {canManage ? (

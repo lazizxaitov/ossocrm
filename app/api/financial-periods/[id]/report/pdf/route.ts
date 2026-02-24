@@ -1,6 +1,7 @@
-﻿import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { loadPdfFonts, toPdfText } from "@/lib/pdf-font";
 import { getPeriodReportData } from "@/lib/period-report";
 import { PERIODS_VIEW_ROLES } from "@/lib/rbac";
 import { ruStatus } from "@/lib/ru-labels";
@@ -20,8 +21,7 @@ export async function GET(_: Request, { params }: RouteParams) {
   }
 
   const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const { regular, bold, cyrillicSupported } = await loadPdfFonts(pdf);
 
   let page = pdf.addPage([595, 842]);
   let y = 805;
@@ -32,7 +32,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     y = 805;
   };
 
-  const drawAtSafe = (
+  const drawAt = (
     x: number,
     yy: number,
     text: string,
@@ -40,26 +40,20 @@ export async function GET(_: Request, { params }: RouteParams) {
     isBold = false,
     color = rgb(0.12, 0.15, 0.2),
   ) => {
-    const drawRaw = (value: string) =>
-      page.drawText(value, {
-        x,
-        y: yy,
-        size,
-        font: isBold ? bold : regular,
-        color,
-        maxWidth: 520,
-        lineHeight: size + 2,
-      });
-    try {
-      drawRaw(text);
-    } catch {
-      drawRaw(text.replace(/[^\x20-\x7E]/g, " "));
-    }
+    page.drawText(toPdfText(text, cyrillicSupported), {
+      x,
+      y: yy,
+      size,
+      font: isBold ? bold : regular,
+      color,
+      maxWidth: 520,
+      lineHeight: size + 2,
+    });
   };
 
   const drawText = (text: string, size = 10, isBold = false, color = rgb(0.12, 0.15, 0.2)) => {
     ensurePage(size + 6);
-    drawAtSafe(36, y, text, size, isBold, color);
+    drawAt(36, y, text, size, isBold, color);
     y -= size + 6;
   };
 
@@ -80,56 +74,56 @@ export async function GET(_: Request, { params }: RouteParams) {
     color: rgb(0.97, 0.98, 1),
   });
 
-  drawAtSafe(44, 792, "OSSO", 24, true, rgb(0.05, 0.12, 0.25));
-  drawAtSafe(44, 774, "Otchet finansovogo ucheta i analitiki", 9, false, rgb(0.25, 0.33, 0.45));
-  drawAtSafe(390, 794, "UTVERZHDENO", 9, true, rgb(0.1, 0.15, 0.25));
-  drawAtSafe(390, 779, "Rukovoditel: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
-  drawAtSafe(390, 766, "Data: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
-  drawAtSafe(390, 753, "Podpis: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
+  drawAt(44, 792, "OSSO", 24, true, rgb(0.05, 0.12, 0.25));
+  drawAt(44, 774, "Финансовая система учета и аналитики", 9, false, rgb(0.25, 0.33, 0.45));
+  drawAt(390, 794, "УТВЕРЖДЕНО", 9, true, rgb(0.1, 0.15, 0.25));
+  drawAt(390, 779, "Руководитель: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
+  drawAt(390, 766, "Дата: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
+  drawAt(390, 753, "Подпись: ____________", 8.5, false, rgb(0.2, 0.25, 0.35));
   y = 728;
 
-  drawText(`Otchet za period ${periodLabel}`, 16, true);
-  drawText(`Sostoyanie: ${ruStatus(report.period.status)}`);
-  drawText(
-    `Diapazon: ${report.range.from.toLocaleDateString("ru-RU")} - ${report.range.to.toLocaleDateString("ru-RU")}`,
-  );
+  drawText(`Отчет за период ${periodLabel}`, 16, true);
+  drawText(`Статус: ${ruStatus(report.period.status)}`);
+  drawText(`Диапазон: ${report.range.from.toLocaleDateString("ru-RU")} - ${report.range.to.toLocaleDateString("ru-RU")}`);
 
   drawSectionTitle("KPI");
-  drawText(`Vyruchka: ${report.kpi.revenue.toFixed(2)} USD`);
-  drawText(`Sebestoimost: ${report.kpi.cogs.toFixed(2)} USD`);
-  drawText(`Raskhody: ${report.kpi.expenses.toFixed(2)} USD`);
-  drawText(`Chistaya pribyl: ${report.kpi.netProfit.toFixed(2)} USD`);
-  drawText(`Dolg: ${report.kpi.debtTotal.toFixed(2)} USD`);
-  drawText(`Dostupno k vyplate: ${report.kpi.availableToPayout.toFixed(2)} USD`);
+  drawText(`Выручка: ${report.kpi.revenue.toFixed(2)} USD`);
+  drawText(`Себестоимость: ${report.kpi.cogs.toFixed(2)} USD`);
+  drawText(`Расходы: ${report.kpi.expenses.toFixed(2)} USD`);
+  drawText(`Чистая прибыль: ${report.kpi.netProfit.toFixed(2)} USD`);
+  drawText(`Долг: ${report.kpi.debtTotal.toFixed(2)} USD`);
+  drawText(`Доступно к выплате: ${report.kpi.availableToPayout.toFixed(2)} USD`);
 
-  drawSectionTitle("Svodka");
-  drawText(`Prodazh: ${report.summary.salesCount}`);
-  drawText(`Prodazh zaversheno: ${report.summary.completedSales}`);
-  drawText(`Prodazh chastichno oplacheno: ${report.summary.partialSales}`);
-  drawText(`Prodazh v dolg: ${report.summary.debtSales}`);
-  drawText(`Prosrochennykh dolgov: ${report.summary.overdueDebtCount}`);
-  drawText(`Summa prosrochennogo dolga: ${report.summary.overdueDebtAmount.toFixed(2)} USD`);
-  drawText(`Raskhodov: ${report.summary.expensesCount}`);
-  drawText(`Korrektsii raskhodov: ${report.summary.totalCorrectionsUSD.toFixed(2)} USD`);
-  drawText(`Vyplat investoram: ${report.summary.payoutsCount}`);
-  drawText(`Inventarizatsii: ${report.summary.inventorySessionsCount}`);
-  drawText(`Inventarizatsii s raskhozhdeniyami: ${report.summary.discrepancySessionsCount}`);
-  drawText(`Konteynerov v operatsiyakh: ${report.summary.containersInvolved}`);
+  drawSectionTitle("Сводка");
+  drawText(`Продаж: ${report.summary.salesCount}`);
+  drawText(`Продаж завершено: ${report.summary.completedSales}`);
+  drawText(`Продаж частично оплачено: ${report.summary.partialSales}`);
+  drawText(`Продаж в долг: ${report.summary.debtSales}`);
+  drawText(`Просроченных долгов: ${report.summary.overdueDebtCount}`);
+  drawText(`Сумма просроченного долга: ${report.summary.overdueDebtAmount.toFixed(2)} USD`);
+  drawText(`Расходов: ${report.summary.expensesCount}`);
+  drawText(`Коррекции расходов: ${report.summary.totalCorrectionsUSD.toFixed(2)} USD`);
+  drawText(`Выплат инвесторам: ${report.summary.payoutsCount}`);
+  drawText(`Возвратов: ${report.summary.returnsCount}`);
+  drawText(`Сумма возвратов: ${report.summary.totalReturnsUSD.toFixed(2)} USD`);
+  drawText(`Инвентаризаций: ${report.summary.inventorySessionsCount}`);
+  drawText(`Инвентаризаций с расхождениями: ${report.summary.discrepancySessionsCount}`);
+  drawText(`Контейнеров в операциях: ${report.summary.containersInvolved}`);
 
-  drawSectionTitle("Prodazhi");
+  drawSectionTitle("Продажи");
   if (!report.sales.length) {
-    drawText("Net dannykh.");
+    drawText("Нет данных.");
   } else {
     for (const row of report.sales) {
       drawText(
-        `${row.invoiceNumber} | ${row.createdAt.toLocaleDateString("ru-RU")} | ${row.clientName} | ${ruStatus(row.status)} | Itogo ${row.totalAmountUSD.toFixed(2)} | Oplacheno ${row.paidAmountUSD.toFixed(2)} | Dolg ${row.debtAmountUSD.toFixed(2)}`,
+        `${row.invoiceNumber} | ${row.createdAt.toLocaleDateString("ru-RU")} | ${row.clientName} | ${ruStatus(row.status)} | Итого ${row.totalAmountUSD.toFixed(2)} | Оплачено ${row.paidAmountUSD.toFixed(2)} | Долг ${row.debtAmountUSD.toFixed(2)}`,
       );
     }
   }
 
-  drawSectionTitle("Raskhody konteynerov");
+  drawSectionTitle("Расходы контейнеров");
   if (!report.expenses.length) {
-    drawText("Net dannykh.");
+    drawText("Нет данных.");
   } else {
     for (const row of report.expenses) {
       drawText(
@@ -138,9 +132,9 @@ export async function GET(_: Request, { params }: RouteParams) {
     }
   }
 
-  drawSectionTitle("Vyplaty investoram");
+  drawSectionTitle("Выплаты инвесторам");
   if (!report.payouts.length) {
-    drawText("Net dannykh.");
+    drawText("Нет данных.");
   } else {
     for (const row of report.payouts) {
       drawText(
@@ -149,13 +143,24 @@ export async function GET(_: Request, { params }: RouteParams) {
     }
   }
 
-  drawSectionTitle("Inventarizatsii");
+  drawSectionTitle("Возвраты");
+  if (!report.returns.length) {
+    drawText("Нет данных.");
+  } else {
+    for (const row of report.returns) {
+      drawText(
+        `${row.returnNumber} | ${row.createdAt.toLocaleDateString("ru-RU")} | ${row.invoiceNumber} | ${row.clientName} | Позиций ${row.itemsCount} | Сумма ${row.totalReturnUSD.toFixed(2)} USD`,
+      );
+    }
+  }
+
+  drawSectionTitle("Инвентаризации");
   if (!report.inventory.length) {
-    drawText("Net dannykh.");
+    drawText("Нет данных.");
   } else {
     for (const row of report.inventory) {
       drawText(
-        `${row.createdAt.toLocaleDateString("ru-RU")} | ${row.title} | ${ruStatus(row.status)} | Raskhozhdeniya: ${row.discrepancyCount}`,
+        `${row.createdAt.toLocaleDateString("ru-RU")} | ${row.title} | ${ruStatus(row.status)} | Расхождения: ${row.discrepancyCount}`,
       );
     }
   }
@@ -174,8 +179,8 @@ export async function GET(_: Request, { params }: RouteParams) {
     thickness: 0.8,
     color: rgb(0.55, 0.6, 0.68),
   });
-  drawAtSafe(36, y - 14, "Rukovoditel", 9, false, rgb(0.3, 0.35, 0.45));
-  drawAtSafe(320, y - 14, "Glavnyy bukhgalter", 9, false, rgb(0.3, 0.35, 0.45));
+  drawAt(36, y - 14, "Руководитель", 9, false, rgb(0.3, 0.35, 0.45));
+  drawAt(320, y - 14, "Главный бухгалтер", 9, false, rgb(0.3, 0.35, 0.45));
 
   const bytes = await pdf.save();
   const fileName = `period-${report.period.year}-${String(report.period.month).padStart(2, "0")}.pdf`;

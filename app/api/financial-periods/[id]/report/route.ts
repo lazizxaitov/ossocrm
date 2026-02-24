@@ -41,6 +41,8 @@ export async function GET(_: Request, { params }: RouteParams) {
     `Расходов,${report.summary.expensesCount}`,
     `Сумма корректировок расходов USD,${report.summary.totalCorrectionsUSD.toFixed(2)}`,
     `Выплат инвесторам,${report.summary.payoutsCount}`,
+    `Возвратов,${report.summary.returnsCount}`,
+    `Сумма возвратов USD,${report.summary.totalReturnsUSD.toFixed(2)}`,
     `Инвентаризаций,${report.summary.inventorySessionsCount}`,
     `Инвентаризаций с расхождениями,${report.summary.discrepancySessionsCount}`,
     "",
@@ -79,6 +81,19 @@ export async function GET(_: Request, { params }: RouteParams) {
     "Дата,Инвестор,Контейнер,Сумма USD",
     ...report.payouts.map((row) =>
       [row.payoutDate.toLocaleDateString("ru-RU"), row.investorName, row.containerName, row.amountUSD.toFixed(2)].join(","),
+    ),
+    "",
+    "Возвраты",
+    "Номер возврата,Дата,Счет,Клиент,Позиции,Сумма возврата USD",
+    ...report.returns.map((row) =>
+      [
+        row.returnNumber,
+        row.createdAt.toLocaleDateString("ru-RU"),
+        row.invoiceNumber,
+        row.clientName,
+        row.itemsCount,
+        row.totalReturnUSD.toFixed(2),
+      ].join(","),
     ),
     "",
     "Инвентаризации",

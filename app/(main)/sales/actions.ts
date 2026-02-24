@@ -22,9 +22,15 @@ type ReturnItemInput = {
   quantity: number;
 };
 
+type ExchangeAddItemInput = {
+  containerItemId: string;
+  quantity: number;
+  salePricePerUnitUSD: number;
+};
+
 function assertCanManage(role: string) {
   if (!SALES_MANAGE_ROLES.includes(role as (typeof SALES_MANAGE_ROLES)[number])) {
-    throw new Error("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ РґР»СЏ РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё.");
+    throw new Error("Недостаточно прав для выполнения операции.");
   }
 }
 
@@ -284,12 +290,12 @@ export async function createReturnAction(formData: FormData) {
   try {
     inputs = JSON.parse(itemsJson) as ReturnItemInput[];
   } catch {
-    throw new Error("РќРµРєРѕСЂСЂРµРєС‚РЅС‹Рµ РїРѕР·РёС†РёРё РІРѕР·РІСЂР°С‚Р°.");
+    throw new Error("Некорректные позиции возврата.");
   }
 
   const items = inputs.filter((item) => item.quantity > 0);
   if (!saleId || items.length === 0) {
-    throw new Error("Р”РѕР±Р°РІСЊС‚Рµ С‚РѕРІР°СЂС‹ РґР»СЏ РІРѕР·РІСЂР°С‚Р°.");
+    throw new Error("Добавьте товары для возврата.");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -298,7 +304,7 @@ export async function createReturnAction(formData: FormData) {
       include: { items: { include: { containerItem: { select: { containerId: true } } } } },
     });
     if (!sale) {
-      throw new Error("РџСЂРѕРґР°Р¶Р° РЅРµ РЅР°Р№РґРµРЅР°.");
+      throw new Error("Продажа не найдена.");
     }
     await assertOpenPeriodById(sale.financialPeriodId);
 
@@ -322,12 +328,12 @@ export async function createReturnAction(formData: FormData) {
     for (const item of items) {
       const saleItem = saleItemMap.get(item.saleItemId);
       if (!saleItem) {
-        throw new Error("РџРѕР·РёС†РёСЏ РїСЂРѕРґР°Р¶Рё РЅРµ РЅР°Р№РґРµРЅР°.");
+        throw new Error("Позиция продажи не найдена.");
       }
       const already = returnedByItem.get(saleItem.id) ?? 0;
       const available = saleItem.quantity - already;
       if (item.quantity > available) {
-        throw new Error("РљРѕР»РёС‡РµСЃС‚РІРѕ РІРѕР·РІСЂР°С‚Р° РїСЂРµРІС‹С€Р°РµС‚ РґРѕСЃС‚СѓРїРЅРѕРµ.");
+        throw new Error("Количество возврата превышает доступное.");
       }
 
       const amountUSD = item.quantity * saleItem.salePricePerUnitUSD;
@@ -347,6 +353,20 @@ export async function createReturnAction(formData: FormData) {
         returnNumber,
         totalReturnUSD,
         createdById: session.userId,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        action: "CREATE_RETURN",
+        entityType: "Return",
+        entityId: createdReturn.id,
+        createdById: session.userId,
+        metadata: JSON.stringify({
+          returnNumber: createdReturn.returnNumber,
+          saleId,
+          totalReturnUSD,
+          itemsCount: rows.length,
+        }),
       },
     });
 
@@ -398,6 +418,224 @@ export async function createReturnAction(formData: FormData) {
   revalidatePath("/sales");
   revalidatePath(`/sales/${saleId}`);
   revalidatePath("/warehouse");
+}
+
+export async function createExchangeAction(formData: FormData) {
+  const session = await getRequiredSession();
+  assertCanManage(session.role);
+
+  const saleId = String(formData.get("saleId") ?? "").trim();
+  const returnItemsJson = String(formData.get("returnItemsJson") ?? "[]");
+  const addItemsJson = String(formData.get("addItemsJson") ?? "[]");
+
+  let returnInputs: ReturnItemInput[];
+  let addInputs: ExchangeAddItemInput[];
+  try {
+    returnInputs = JSON.parse(returnItemsJson) as ReturnItemInput[];
+    addInputs = JSON.parse(addItemsJson) as ExchangeAddItemInput[];
+  } catch {
+    redirect(`/sales/${saleId}?error=${encodeURIComponent("Некорректные данные замены товара.")}`);
+  }
+
+  const returnItems = returnInputs.filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
+  const addItems = addInputs.filter(
+    (item) =>
+      !!item.containerItemId &&
+      Number.isFinite(item.quantity) &&
+      item.quantity > 0 &&
+      Number.isFinite(item.salePricePerUnitUSD) &&
+      item.salePricePerUnitUSD > 0,
+  );
+
+  if (!saleId || returnItems.length === 0 || addItems.length === 0) {
+    redirect(`/sales/${saleId}?error=${encodeURIComponent("Для замены укажите товары на возврат и товары на добавление.")}`);
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId },
+        include: {
+          items: {
+            include: {
+              returnItems: true,
+              containerItem: { select: { id: true, containerId: true } },
+            },
+          },
+        },
+      });
+      if (!sale) {
+        throw new Error("Продажа не найдена.");
+      }
+      await assertOpenPeriodById(sale.financialPeriodId);
+
+      const saleItemMap = new Map(sale.items.map((item) => [item.id, item]));
+      const alreadyReturned = await tx.returnItem.findMany({
+        where: { saleItem: { saleId } },
+      });
+      const returnedByItem = new Map<string, number>();
+      for (const row of alreadyReturned) {
+        returnedByItem.set(row.saleItemId, (returnedByItem.get(row.saleItemId) ?? 0) + row.quantity);
+      }
+
+      let totalReturnUSD = 0;
+      const returnRows: Array<{
+        saleItemId: string;
+        quantity: number;
+        amountUSD: number;
+        containerItemId: string;
+      }> = [];
+
+      for (const item of returnItems) {
+        const saleItem = saleItemMap.get(item.saleItemId);
+        if (!saleItem) {
+          throw new Error("Позиция продажи для возврата не найдена.");
+        }
+        const already = returnedByItem.get(saleItem.id) ?? 0;
+        const available = saleItem.quantity - already;
+        if (item.quantity > available) {
+          throw new Error("Количество возврата превышает доступное.");
+        }
+        const amountUSD = item.quantity * saleItem.salePricePerUnitUSD;
+        totalReturnUSD += amountUSD;
+        returnRows.push({
+          saleItemId: saleItem.id,
+          quantity: item.quantity,
+          amountUSD,
+          containerItemId: saleItem.containerItemId,
+        });
+      }
+
+      let totalAddUSD = 0;
+      const addRows: Array<{
+        containerItemId: string;
+        containerId: string;
+        productId: string;
+        quantity: number;
+        costPerUnitUSD: number;
+        salePricePerUnitUSD: number;
+        totalUSD: number;
+      }> = [];
+
+      for (const row of addItems) {
+        const containerItem = await tx.containerItem.findUnique({
+          where: { id: row.containerItemId },
+          include: { container: { select: { status: true } } },
+        });
+        if (!containerItem) {
+          throw new Error("Позиция склада для замены не найдена.");
+        }
+        if (containerItem.container.status !== "ARRIVED") {
+          throw new Error("Замену можно делать только товарами из прибывших контейнеров.");
+        }
+        if (containerItem.quantity < row.quantity) {
+          throw new Error("Недостаточно количества товара для замены.");
+        }
+
+        const totalUSD = row.quantity * row.salePricePerUnitUSD;
+        totalAddUSD += totalUSD;
+        addRows.push({
+          containerItemId: containerItem.id,
+          containerId: containerItem.containerId,
+          productId: containerItem.productId,
+          quantity: row.quantity,
+          costPerUnitUSD: containerItem.costPerUnitUSD,
+          salePricePerUnitUSD: row.salePricePerUnitUSD,
+          totalUSD,
+        });
+      }
+
+      const returnNumber = await nextDocumentNumber(tx, "RET");
+      const createdReturn = await tx.return.create({
+        data: {
+          saleId,
+          returnNumber,
+          totalReturnUSD,
+          createdById: session.userId,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "CREATE_RETURN",
+          entityType: "Return",
+          entityId: createdReturn.id,
+          createdById: session.userId,
+          metadata: JSON.stringify({
+            mode: "exchange",
+            returnNumber: createdReturn.returnNumber,
+            saleId,
+            totalReturnUSD,
+            totalAddUSD,
+            returnItemsCount: returnRows.length,
+            addItemsCount: addRows.length,
+          }),
+        },
+      });
+
+      for (const row of returnRows) {
+        await tx.returnItem.create({
+          data: {
+            returnId: createdReturn.id,
+            saleItemId: row.saleItemId,
+            quantity: row.quantity,
+            amountUSD: row.amountUSD,
+          },
+        });
+        await tx.containerItem.update({
+          where: { id: row.containerItemId },
+          data: { quantity: { increment: row.quantity } },
+        });
+      }
+
+      for (const row of addRows) {
+        await tx.saleItem.create({
+          data: {
+            saleId,
+            productId: row.productId,
+            containerItemId: row.containerItemId,
+            quantity: row.quantity,
+            costPerUnitUSD: row.costPerUnitUSD,
+            salePricePerUnitUSD: row.salePricePerUnitUSD,
+            totalUSD: row.totalUSD,
+          },
+        });
+        await tx.containerItem.update({
+          where: { id: row.containerItemId },
+          data: { quantity: { decrement: row.quantity } },
+        });
+      }
+
+      const affectedContainerIds = new Set<string>();
+      for (const row of sale.items) affectedContainerIds.add(row.containerItem.containerId);
+      for (const row of addRows) affectedContainerIds.add(row.containerId);
+      for (const containerId of affectedContainerIds) {
+        await recalculateContainerFinancials(containerId, tx);
+      }
+
+      const newTotal = Math.max(0, sale.totalAmountUSD - totalReturnUSD + totalAddUSD);
+      const paidCapped = Math.min(sale.paidAmountUSD, newTotal);
+      const newDebt = Math.max(0, newTotal - paidCapped);
+
+      await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          totalAmountUSD: newTotal,
+          paidAmountUSD: paidCapped,
+          debtAmountUSD: newDebt,
+          status: computeSaleStatus(newTotal, paidCapped, newDebt, false),
+        },
+      });
+    });
+
+    revalidatePath("/sales");
+    revalidatePath(`/sales/${saleId}`);
+    revalidatePath("/warehouse");
+    redirect(`/sales/${saleId}?success=${encodeURIComponent("Замена товара проведена.")}`);
+  } catch (error) {
+    redirect(
+      `/sales/${saleId}?error=${encodeURIComponent(error instanceof Error ? error.message : "Не удалось провести замену товара.")}`,
+    );
+  }
 }
 
 

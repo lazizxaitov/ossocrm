@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { addPaymentAction } from "@/app/(main)/sales/actions";
+import { DeleteSaleButton } from "@/app/(main)/sales/delete-sale-button";
+import { ExchangeModal } from "@/app/(main)/sales/exchange-modal";
 import { ReturnModal } from "@/app/(main)/sales/return-modal";
 import { CustomDateInput } from "@/components/custom-date-input";
 import { getRequiredSession } from "@/lib/auth";
@@ -26,34 +28,65 @@ export default async function SaleDetailPage({ params, searchParams }: SaleDetai
   const success = (query.success ?? "").trim();
   const canManage = SALES_MANAGE_ROLES.includes(session.role);
 
-  const sale = await prisma.sale.findUnique({
-    where: { id },
-    include: {
-      client: true,
-      createdBy: { select: { name: true, login: true } },
-      items: {
-        include: {
-          product: true,
-          containerItem: { include: { container: true } },
-          returnItems: true,
+  const [sale, stock] = await Promise.all([
+    prisma.sale.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        createdBy: { select: { name: true, login: true } },
+        items: {
+          include: {
+            product: true,
+            containerItem: { include: { container: true } },
+            returnItems: true,
+          },
+        },
+        payments: {
+          include: { createdBy: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+        returns: {
+          include: {
+            createdBy: { select: { name: true } },
+            items: { include: { saleItem: { include: { product: true } } } },
+          },
+          orderBy: { createdAt: "desc" },
         },
       },
-      payments: {
-        include: { createdBy: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-      },
-      returns: {
-        include: {
-          createdBy: { select: { name: true } },
-          items: { include: { saleItem: { include: { product: true } } } },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-    },
-  });
+    }),
+    prisma.containerItem.findMany({
+      where: { quantity: { gt: 0 }, container: { status: "ARRIVED" } },
+      include: { product: true, container: true },
+      orderBy: [{ container: { createdAt: "desc" } }, { createdAt: "desc" }],
+      take: 200,
+    }),
+  ]);
 
   if (!sale) {
     notFound();
+  }
+
+  const returnIds = sale.returns.map((ret) => ret.id);
+  const exchangeReturnIds = new Set<string>();
+  if (returnIds.length > 0) {
+    const returnLogs = await prisma.auditLog.findMany({
+      where: {
+        action: "CREATE_RETURN",
+        entityType: "Return",
+        entityId: { in: returnIds },
+      },
+      select: { entityId: true, metadata: true },
+    });
+    for (const log of returnLogs) {
+      try {
+        const meta = log.metadata ? (JSON.parse(log.metadata) as { mode?: string }) : null;
+        if (meta?.mode === "exchange") {
+          exchangeReturnIds.add(log.entityId);
+        }
+      } catch {
+        // ignore broken metadata
+      }
+    }
   }
 
   const returnableItems = sale.items.map((item) => {
@@ -78,10 +111,24 @@ export default async function SaleDetailPage({ params, searchParams }: SaleDetai
               Клиент: {sale.client.name} | Статус: {ruStatus(sale.status)}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canManage ? (
-              <ReturnModal saleId={sale.id} items={returnableItems.filter((item) => item.maxReturnQty > 0)} />
+              <>
+                <ReturnModal saleId={sale.id} items={returnableItems.filter((item) => item.maxReturnQty > 0)} />
+                <ExchangeModal
+                  saleId={sale.id}
+                  returnItems={returnableItems.filter((item) => item.maxReturnQty > 0)}
+                  stock={stock.map((item) => ({
+                    containerItemId: item.id,
+                    title: `${item.product.name} (${item.product.sku})`,
+                    containerName: item.container.name,
+                    availableQty: item.quantity,
+                    defaultSalePriceUSD: item.salePriceUSD ?? item.product.basePriceUSD,
+                  }))}
+                />
+              </>
             ) : null}
+            {session.role === "SUPER_ADMIN" ? <DeleteSaleButton saleId={sale.id} invoiceNumber={sale.invoiceNumber} /> : null}
             <Link
               href={`/api/sales/${sale.id}/invoice`}
               className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
@@ -200,6 +247,11 @@ export default async function SaleDetailPage({ params, searchParams }: SaleDetai
               <div key={ret.id} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm">
                 <p className="font-medium text-slate-800">
                   {ret.returnNumber} - {formatUsd(ret.totalReturnUSD)}
+                  {exchangeReturnIds.has(ret.id) ? (
+                    <span className="ml-2 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                      Замена
+                    </span>
+                  ) : null}
                 </p>
                 <p className="text-xs text-slate-500">
                   {new Date(ret.createdAt).toLocaleDateString("ru-RU")} | {ret.createdBy.name}

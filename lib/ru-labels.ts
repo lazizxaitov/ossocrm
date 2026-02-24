@@ -40,6 +40,15 @@ const ROLE_LABELS: Record<string, string> = {
   WAREHOUSE: "Склад",
 };
 
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  CREATE_EXPENSE: "Создание расхода",
+  CREATE_EXPENSE_CORRECTION: "Создание корректировки расхода",
+  CREATE_RETURN: "Создание возврата",
+  DELETE_SALE: "Удаление продажи",
+  LOCK_FINANCIAL_PERIOD: "Закрытие финансового периода",
+  UNLOCK_FINANCIAL_PERIOD: "Разблокировка финансового периода",
+};
+
 export function ruStatus(value: string) {
   return STATUS_LABELS[value as KnownStatus] ?? value;
 }
@@ -48,3 +57,6 @@ export function ruRole(value: string) {
   return ROLE_LABELS[value] ?? value;
 }
 
+export function ruAuditAction(value: string) {
+  return AUDIT_ACTION_LABELS[value] ?? value;
+}

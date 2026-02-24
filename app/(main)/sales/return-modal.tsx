@@ -48,14 +48,8 @@ export function ReturnModal({ saleId, items }: ReturnModalProps) {
         Оформить возврат
       </button>
       {open ? (
-        <div
-          className="fixed inset-0 z-40 grid place-items-center bg-slate-900/40 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-3xl rounded-2xl bg-white p-4 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/40 p-4" onClick={() => setOpen(false)}>
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-4 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-900">Создание возврата</h3>
             <p className="text-sm text-slate-600">Можно оформить полный или частичный возврат.</p>
             <form action={createReturnAction} className="mt-3 grid gap-3">

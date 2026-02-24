@@ -48,6 +48,14 @@ export type PeriodReportData = {
     containerName: string;
     amountUSD: number;
   }>;
+  returns: Array<{
+    returnNumber: string;
+    createdAt: Date;
+    invoiceNumber: string;
+    clientName: string;
+    totalReturnUSD: number;
+    itemsCount: number;
+  }>;
   inventory: Array<{
     createdAt: Date;
     title: string;
@@ -63,6 +71,8 @@ export type PeriodReportData = {
     overdueDebtAmount: number;
     expensesCount: number;
     payoutsCount: number;
+    returnsCount: number;
+    totalReturnsUSD: number;
     inventorySessionsCount: number;
     discrepancySessionsCount: number;
     totalCorrectionsUSD: number;
@@ -91,7 +101,7 @@ export async function getPeriodReportData(periodId: string): Promise<PeriodRepor
   const { from, to } = rangeFromPeriod(period.year, period.month);
   const kpi = await computeKpis({ from, to });
 
-  const [salesRaw, expensesRaw, payoutsRaw, inventoryRaw] = await Promise.all([
+  const [salesRaw, expensesRaw, payoutsRaw, returnsRaw, inventoryRaw] = await Promise.all([
     prisma.sale.findMany({
       where: { financialPeriodId: period.id },
       orderBy: { createdAt: "asc" },
@@ -119,6 +129,19 @@ export async function getPeriodReportData(periodId: string): Promise<PeriodRepor
       include: {
         investor: { select: { name: true } },
         container: { select: { name: true } },
+      },
+    }),
+    prisma.return.findMany({
+      where: { sale: { financialPeriodId: period.id } },
+      orderBy: { createdAt: "asc" },
+      include: {
+        sale: {
+          select: {
+            invoiceNumber: true,
+            client: { select: { name: true } },
+          },
+        },
+        items: { select: { id: true } },
       },
     }),
     prisma.inventorySession.findMany({
@@ -167,6 +190,14 @@ export async function getPeriodReportData(periodId: string): Promise<PeriodRepor
     containerName: row.container.name,
     amountUSD: row.amountUSD,
   }));
+  const returns = returnsRaw.map((row) => ({
+    returnNumber: row.returnNumber,
+    createdAt: row.createdAt,
+    invoiceNumber: row.sale.invoiceNumber,
+    clientName: row.sale.client.name,
+    totalReturnUSD: row.totalReturnUSD,
+    itemsCount: row.items.length,
+  }));
 
   const inventory = inventoryRaw.map((row) => ({
     createdAt: row.createdAt,
@@ -182,6 +213,7 @@ export async function getPeriodReportData(periodId: string): Promise<PeriodRepor
   const containerSet = new Set<string>();
   for (const row of expenses) containerSet.add(row.containerName);
   for (const row of payouts) containerSet.add(row.containerName);
+  const totalReturnsUSD = returns.reduce((sum, row) => sum + row.totalReturnUSD, 0);
 
   const summary = {
     salesCount: sales.length,
@@ -192,6 +224,8 @@ export async function getPeriodReportData(periodId: string): Promise<PeriodRepor
     overdueDebtAmount,
     expensesCount: expenses.length,
     payoutsCount: payouts.length,
+    returnsCount: returns.length,
+    totalReturnsUSD,
     inventorySessionsCount: inventory.length,
     discrepancySessionsCount: inventory.filter((row) => row.discrepancyCount > 0).length,
     totalCorrectionsUSD,
@@ -211,6 +245,7 @@ export async function getPeriodReportData(periodId: string): Promise<PeriodRepor
     sales,
     expenses,
     payouts,
+    returns,
     inventory,
     summary,
   };

@@ -1,7 +1,8 @@
-﻿import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
+import { fitPdfText, loadPdfFonts, toPdfText } from "@/lib/pdf-font";
 import { prisma } from "@/lib/prisma";
 import { SALES_VIEW_ROLES } from "@/lib/rbac";
 
@@ -29,11 +30,38 @@ export async function GET(_: Request, { params }: RouteParams) {
           },
         },
       },
+      returns: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, returnNumber: true, createdAt: true, totalReturnUSD: true },
+      },
     },
   });
 
   if (!sale) {
     return NextResponse.json({ error: "Продажа не найдена." }, { status: 404 });
+  }
+
+  const returnIds = sale.returns.map((ret) => ret.id);
+  const exchangeReturnIds = new Set<string>();
+  if (returnIds.length > 0) {
+    const returnLogs = await prisma.auditLog.findMany({
+      where: {
+        action: "CREATE_RETURN",
+        entityType: "Return",
+        entityId: { in: returnIds },
+      },
+      select: { entityId: true, metadata: true },
+    });
+    for (const log of returnLogs) {
+      try {
+        const meta = log.metadata ? (JSON.parse(log.metadata) as { mode?: string }) : null;
+        if (meta?.mode === "exchange") {
+          exchangeReturnIds.add(log.entityId);
+        }
+      } catch {
+        // ignore broken metadata
+      }
+    }
   }
 
   const totalsByCategory = sale.items.reduce(
@@ -53,20 +81,14 @@ export async function GET(_: Request, { params }: RouteParams) {
 
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  const safeText = (value: string) =>
-    String(value ?? "")
-      .normalize("NFKD")
-      .replace(/[^\x20-\x7E]/g, "?");
+  const { regular, bold, cyrillicSupported } = await loadPdfFonts(pdf);
 
   const draw = (text: string, x: number, y: number, size = 10, isBold = false) => {
-    page.drawText(safeText(text), {
+    page.drawText(toPdfText(text, cyrillicSupported), {
       x,
       y,
       size,
-      font: isBold ? bold : font,
+      font: isBold ? bold : regular,
       color: rgb(0.1, 0.1, 0.12),
     });
   };
@@ -74,19 +96,19 @@ export async function GET(_: Request, { params }: RouteParams) {
   let y = 800;
   draw("OSSO", 40, y, 18, true);
   y -= 24;
-  draw("Schet", 40, y, 14, true);
+  draw("Счет", 40, y, 14, true);
   y -= 18;
-  draw(`Nomer: ${sale.invoiceNumber}`, 40, y);
+  draw(`Номер: ${sale.invoiceNumber}`, 40, y);
   y -= 14;
-  draw(`Data: ${new Date(sale.createdAt).toLocaleString("ru-RU")}`, 40, y);
+  draw(`Дата: ${new Date(sale.createdAt).toLocaleString("ru-RU")}`, 40, y);
   y -= 14;
-  draw(`Klient: ${sale.client.name}`, 40, y);
+  draw(`Клиент: ${sale.client.name}`, 40, y);
   y -= 26;
 
-  draw("Tovar", 40, y, 10, true);
-  draw("Kol-vo", 290, y, 10, true);
-  draw("Cena", 360, y, 10, true);
-  draw("Summa", 470, y, 10, true);
+  draw("Товар", 40, y, 10, true);
+  draw("Кол-во", 290, y, 10, true);
+  draw("Цена", 370, y, 10, true);
+  draw("Сумма", 470, y, 10, true);
   y -= 12;
   page.drawLine({
     start: { x: 40, y },
@@ -97,12 +119,14 @@ export async function GET(_: Request, { params }: RouteParams) {
   y -= 14;
 
   for (const item of sale.items) {
-    draw(`${item.product.name} (${item.product.sku})`, 40, y);
+    const rowText = `${item.product.name} (${item.product.sku})`;
+    const fitted = fitPdfText(toPdfText(rowText, cyrillicSupported), regular, 10, 235);
+    draw(fitted, 40, y);
     draw(String(item.quantity), 290, y);
-    draw(`$${item.salePricePerUnitUSD.toFixed(2)}`, 360, y);
+    draw(`$${item.salePricePerUnitUSD.toFixed(2)}`, 370, y);
     draw(formatUsd(item.totalUSD), 470, y);
     y -= 16;
-    if (y < 150) break;
+    if (y < 190) break;
   }
 
   y -= 8;
@@ -114,19 +138,34 @@ export async function GET(_: Request, { params }: RouteParams) {
   });
   y -= 18;
 
-  draw(`Itogo: ${formatUsd(sale.totalAmountUSD)}`, 360, y, 11, true);
+  draw(`Итого: ${formatUsd(sale.totalAmountUSD)}`, 360, y, 11, true);
   y -= 14;
-  draw(`Santekhnika: ${formatUsd(totalsByCategory.plumbing)}`, 320, y, 10);
+  draw(`Сантехника: ${formatUsd(totalsByCategory.plumbing)}`, 320, y, 10);
   y -= 12;
-  draw(`Tumby: ${formatUsd(totalsByCategory.vanity)}`, 320, y, 10);
+  draw(`Тумбы: ${formatUsd(totalsByCategory.vanity)}`, 320, y, 10);
   y -= 12;
   if (totalsByCategory.accessory > 0) {
-    draw(`Aksessuary: ${formatUsd(totalsByCategory.accessory)}`, 320, y, 10);
+    draw(`Аксессуары: ${formatUsd(totalsByCategory.accessory)}`, 320, y, 10);
     y -= 12;
   }
-  draw(`Oplacheno: ${formatUsd(sale.paidAmountUSD)}`, 360, y, 11, true);
+  draw(`Оплачено: ${formatUsd(sale.paidAmountUSD)}`, 360, y, 11, true);
   y -= 14;
-  draw(`Dolg: ${formatUsd(sale.debtAmountUSD)}`, 360, y, 11, true);
+  draw(`Долг: ${formatUsd(sale.debtAmountUSD)}`, 360, y, 11, true);
+  y -= 24;
+
+  draw("История возвратов", 40, y, 11, true);
+  y -= 14;
+  if (!sale.returns.length) {
+    draw("Возвратов по этому счету нет.", 40, y, 10);
+  } else {
+    for (const ret of sale.returns) {
+      const modeLabel = exchangeReturnIds.has(ret.id) ? " | Замена" : "";
+      const line = `${ret.returnNumber} | ${ret.createdAt.toLocaleDateString("ru-RU")} | ${formatUsd(ret.totalReturnUSD)}${modeLabel}`;
+      draw(line, 40, y, 10);
+      y -= 14;
+      if (y < 36) break;
+    }
+  }
 
   const bytes = await pdf.save();
   return new NextResponse(new Uint8Array(bytes), {

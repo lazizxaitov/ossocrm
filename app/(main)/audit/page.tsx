@@ -2,6 +2,19 @@ import { redirect } from "next/navigation";
 import { getRequiredSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AUDIT_VIEW_ROLES } from "@/lib/rbac";
+import { ruAuditAction } from "@/lib/ru-labels";
+
+const ENTITY_LABELS: Record<string, string> = {
+  FinancialPeriod: "Финансовый период",
+  ContainerExpense: "Расход контейнера",
+  ExpenseCorrection: "Корректировка расхода",
+  Return: "Возврат",
+  Sale: "Продажа",
+};
+
+function ruEntityType(value: string) {
+  return ENTITY_LABELS[value] ?? value;
+}
 
 export default async function AuditPage() {
   const session = await getRequiredSession();
@@ -38,10 +51,10 @@ export default async function AuditPage() {
                 <td className="px-3 py-2 text-slate-700">
                   {log.createdBy.name} ({log.createdBy.login})
                 </td>
-                <td className="px-3 py-2 text-slate-700">{log.action}</td>
+                <td className="px-3 py-2 text-slate-700">{ruAuditAction(log.action)}</td>
                 <td className="px-3 py-2 text-slate-600">{new Date(log.createdAt).toLocaleString("ru-RU")}</td>
                 <td className="px-3 py-2 text-slate-600">
-                  {log.entityType} / {log.entityId}
+                  {ruEntityType(log.entityType)} / {log.entityId}
                 </td>
               </tr>
             ))}

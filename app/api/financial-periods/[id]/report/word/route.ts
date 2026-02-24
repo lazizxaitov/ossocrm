@@ -115,6 +115,8 @@ export async function GET(_: Request, { params }: RouteParams) {
       ["Расходов", String(report.summary.expensesCount)],
       ["Сумма корректировок расходов USD", report.summary.totalCorrectionsUSD.toFixed(2)],
       ["Выплат инвесторам", String(report.summary.payoutsCount)],
+      ["Возвратов", String(report.summary.returnsCount)],
+      ["Сумма возвратов USD", report.summary.totalReturnsUSD.toFixed(2)],
       ["Инвентаризаций", String(report.summary.inventorySessionsCount)],
       ["Инвентаризаций с расхождениями", String(report.summary.discrepancySessionsCount)],
       ["Контейнеров в операциях", String(report.summary.containersInvolved)],
@@ -160,6 +162,19 @@ export async function GET(_: Request, { params }: RouteParams) {
       row.investorName,
       row.containerName,
       row.amountUSD.toFixed(2),
+    ]),
+  )}
+
+  <h2>Возвраты</h2>
+  ${table(
+    ["Номер возврата", "Дата", "Счет", "Клиент", "Позиции", "Сумма возврата USD"],
+    report.returns.map((row) => [
+      row.returnNumber,
+      row.createdAt.toLocaleDateString("ru-RU"),
+      row.invoiceNumber,
+      row.clientName,
+      String(row.itemsCount),
+      row.totalReturnUSD.toFixed(2),
     ]),
   )}
 
