@@ -6,6 +6,7 @@ import { getRequiredSession } from "@/lib/auth";
 import { recalculateContainerFinancials } from "@/lib/container-finance";
 import { recalculateContainerUnitCost } from "@/lib/container-cost";
 import { toNumber } from "@/lib/currency";
+import { assertOpenPeriodForDate } from "@/lib/financial-period";
 import { recalculateContainerInvestmentShares } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { CONTAINERS_MANAGE_ROLES } from "@/lib/rbac";
@@ -46,6 +47,7 @@ export async function createContainerAction(
     const purchaseDateRaw = String(formData.get("purchaseDate") ?? "").trim();
     const arrivalDateRaw = String(formData.get("arrivalDate") ?? "").trim();
     const totalPurchaseCNY = toNumber(formData.get("totalPurchaseCNY"));
+    const initialExpensesUSD = toNumber(formData.get("initialExpensesUSD"));
     const exchangeRateRaw = String(formData.get("exchangeRate") ?? "").trim();
     const investmentsJson = String(formData.get("investmentsJson") ?? "[]");
     const containerItemsJson = String(formData.get("containerItemsJson") ?? "[]");
@@ -66,6 +68,9 @@ export async function createContainerAction(
     }
     if (!Number.isFinite(totalPurchaseCNY) || totalPurchaseCNY <= 0) {
       return { error: "Введите сумму закупки в CNY больше 0.", success: false };
+    }
+    if (!Number.isFinite(initialExpensesUSD) || initialExpensesUSD < 0) {
+      return { error: "Введите корректную сумму расходов USD.", success: false };
     }
 
     const latestCurrency = await prisma.currencySetting.findFirst({
@@ -144,6 +149,7 @@ export async function createContainerAction(
       0,
     );
     const totalPurchaseUSD = Math.max(baseTotalPurchaseUSD, itemsPurchaseUSD);
+    const initialExpensePeriod = initialExpensesUSD > 0 ? await assertOpenPeriodForDate(new Date()) : null;
 
     await prisma.$transaction(async (tx) => {
       const container = await tx.container.create({
@@ -158,6 +164,20 @@ export async function createContainerAction(
           arrivalDate: parsedArrivalDate,
         },
       });
+
+      if (initialExpensesUSD > 0 && initialExpensePeriod) {
+        await tx.containerExpense.create({
+          data: {
+            containerId: container.id,
+            title: "Стартовый расход",
+            category: "OTHER",
+            amountUSD: initialExpensesUSD,
+            description: "Расход добавлен при создании контейнера.",
+            financialPeriodId: initialExpensePeriod.id,
+            createdById: session.userId,
+          },
+        });
+      }
 
       if (cleanedInvestments.length > 0) {
         await tx.containerInvestment.createMany({

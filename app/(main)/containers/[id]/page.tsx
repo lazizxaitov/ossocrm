@@ -15,7 +15,7 @@ import {
 } from "@/app/(main)/containers/expense-actions";
 import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
-import { computeInvestorProfit } from "@/lib/investor";
+import { computeInvestorProfit, sortInvestorsOssFirst } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { ruStatus } from "@/lib/ru-labels";
 import {
@@ -93,6 +93,14 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
   if (!container) {
     notFound();
   }
+  const investorsSorted = sortInvestorsOssFirst(investors);
+  const containerInvestmentsSorted = [...container.investments].sort((a, b) => {
+    const aIsOsso = a.investor.name.trim().toLowerCase() === "osso company";
+    const bIsOsso = b.investor.name.trim().toLowerCase() === "osso company";
+    if (aIsOsso && !bIsOsso) return -1;
+    if (!aIsOsso && bIsOsso) return 1;
+    return a.investor.name.localeCompare(b.investor.name, "ru");
+  });
 
   const totalQuantity = container.items.reduce((sum, item) => sum + item.quantity, 0);
   const plannedProfitUSD = container.items.reduce(
@@ -222,6 +230,9 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               <p className="text-sm text-slate-600">
                 Чистая прибыль (с учётом расходов): {formatUsd(container.netProfitUSD)}
               </p>
+              <p className="text-xs text-slate-500">
+                Выплаты инвесторам доступны после прибытия контейнера и только из реальной прибыли в продажах.
+              </p>
               {mismatch ? <p className="text-sm font-medium text-orange-700">Есть расхождение сумм инвестиций.</p> : null}
             </div>
           </div>
@@ -230,7 +241,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
             <div className="mb-3 grid gap-2 rounded-xl border border-[var(--border)] p-3 md:grid-cols-5">
               <form action={addContainerInvestmentAction} className="contents">
                 <input type="hidden" name="containerId" value={container.id} />
-                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Выберите инвестора" options={investors.map((investor) => ({ value: investor.id, label: investor.name }))} />
+                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Выберите инвестора" options={investorsSorted.map((investor) => ({ value: investor.id, label: investor.name }))} />
                 <input
                   name="investedAmountUSD"
                   type="number"
@@ -261,11 +272,11 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                 </tr>
               </thead>
               <tbody>
-                {container.investments.map((row) => {
+                {containerInvestmentsSorted.map((row) => {
                   const plannedProfit = computeInvestorProfit(plannedProfitUSD, row.percentageShare);
                   const actualProfit = computeInvestorProfit(factualProfitUSD, row.percentageShare);
                   const paid = paidByInvestor.get(row.investorId) ?? 0;
-                  const shareAmountUSD = computeInvestorProfit(expected, row.percentageShare);
+                  const shareAmountUSD = actualProfit;
                   const remaining = Math.max(0, shareAmountUSD - paid);
                   return (
                     <tr key={row.id} className="border-t border-[var(--border)]">
@@ -295,7 +306,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               <h4 className="mb-2 text-sm font-semibold text-slate-900">Создать выплату инвестору</h4>
               <form action={createInvestorPayoutAction} className="grid gap-2 md:grid-cols-5">
                 <input type="hidden" name="containerId" value={container.id} />
-                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Инвестор" options={container.investments.map((row) => ({ value: row.investorId, label: row.investor.name }))} />
+                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Инвестор" options={containerInvestmentsSorted.map((row) => ({ value: row.investorId, label: row.investor.name }))} />
                 <input
                   name="amountUSD"
                   type="number"

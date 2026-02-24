@@ -38,3 +38,13 @@ export async function recalculateContainerInvestmentShares(
 export function computeInvestorProfit(containerNetProfitUSD: number, percentageShare: number) {
   return (containerNetProfitUSD * percentageShare) / 100;
 }
+
+export function sortInvestorsOssFirst<T extends { name: string }>(rows: T[]) {
+  return [...rows].sort((a, b) => {
+    const aIsOsso = a.name.trim().toLowerCase() === "osso company";
+    const bIsOsso = b.name.trim().toLowerCase() === "osso company";
+    if (aIsOsso && !bIsOsso) return -1;
+    if (!aIsOsso && bIsOsso) return 1;
+    return a.name.localeCompare(b.name, "ru");
+  });
+}

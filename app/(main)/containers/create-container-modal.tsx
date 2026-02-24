@@ -86,10 +86,12 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
 
   const [purchaseCny, setPurchaseCny] = useState("");
   const [rate, setRate] = useState(defaultRate ? String(defaultRate) : "");
+  const [initialExpensesUSD, setInitialExpensesUSD] = useState("");
   const [arrivalDate, setArrivalDate] = useState("");
 
   const purchaseCnyNumber = Number(purchaseCny || 0);
   const rateNumber = Number(rate || 0);
+  const initialExpensesNumber = Number(initialExpensesUSD || 0);
   const purchaseUsdFromCurrency = purchaseCnyNumber * rateNumber;
 
   const investmentsPayload = useMemo(
@@ -151,7 +153,8 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
     [containerItemsPayload],
   );
   const totalPurchaseUsd = Math.max(purchaseUsdFromCurrency, itemsPurchaseUsd);
-  const diff = investedTotal - totalPurchaseUsd;
+  const expectedInvestmentsUsd = totalPurchaseUsd + Math.max(0, initialExpensesNumber);
+  const diff = investedTotal - expectedInvestmentsUsd;
   const hasMismatch = Math.abs(diff) >= 0.01;
   const editingDetailsRow = editingDetailsForKey === null ? null : itemRows.find((row) => row.key === editingDetailsForKey) ?? null;
   const editingPriceRow = editingPriceForKey === null ? null : itemRows.find((row) => row.key === editingPriceForKey) ?? null;
@@ -265,11 +268,11 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
           >
             <h3 className="text-lg font-semibold text-slate-900">Новый контейнер</h3>
             <p className="text-sm text-slate-600">
-              Расходы не добавляются на этом шаге. Сначала создается контейнер, товары и инвесторы.
+              Заполните закупку, товары, инвесторов и стартовые расходы.
             </p>
 
             <form action={formAction} className="mt-4 grid gap-3">
-              <div className="grid gap-2 md:grid-cols-5">
+              <div className="grid gap-2 md:grid-cols-6">
                 <input
                   name="name"
                   required
@@ -307,6 +310,16 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   value={rate}
                   onChange={(event) => setRate(event.target.value)}
                   placeholder="Курс CNY→USD"
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                />
+                <input
+                  name="initialExpensesUSD"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={initialExpensesUSD}
+                  onChange={(event) => setInitialExpensesUSD(event.target.value)}
+                  placeholder="Стартовые расходы USD"
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                 />
               </div>
@@ -379,6 +392,8 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                 <p>Закупка USD (по курсу): ${purchaseUsdFromCurrency.toFixed(2)}</p>
                 <p>Закупка USD (по товарам): ${itemsPurchaseUsd.toFixed(2)}</p>
                 <p>Итог закупки USD: ${totalPurchaseUsd.toFixed(2)}</p>
+                <p>Стартовые расходы USD: ${Math.max(0, initialExpensesNumber).toFixed(2)}</p>
+                <p>Ожидаемо к инвестициям: ${expectedInvestmentsUsd.toFixed(2)}</p>
                 <p>Вложено инвесторами: ${investedTotal.toFixed(2)}</p>
                 {hasMismatch ? (
                   <p className="font-semibold text-orange-700">

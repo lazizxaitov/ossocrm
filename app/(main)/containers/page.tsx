@@ -4,6 +4,7 @@ import { CreateContainerModal } from "@/app/(main)/containers/create-container-m
 import { ContainerRowActions } from "@/app/(main)/containers/row-actions";
 import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
+import { sortInvestorsOssFirst } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { CONTAINERS_MANAGE_ROLES, CONTAINERS_VIEW_ROLES } from "@/lib/rbac";
 import { ruStatus } from "@/lib/ru-labels";
@@ -60,6 +61,7 @@ export default async function ContainersPage() {
       },
     }),
   ]);
+  const investorsSorted = sortInvestorsOssFirst(investors);
 
   return (
     <section className="grid gap-4">
@@ -77,7 +79,7 @@ export default async function ContainersPage() {
           {canManage ? (
             <CreateContainerModal
               defaultRate={latestCurrency?.cnyToUsdRate ?? null}
-              investors={investors}
+              investors={investorsSorted}
               products={products.map((product) => ({
                 id: product.id,
                 name: product.name,

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { CreateInvestorModal } from "@/app/(main)/investors/create-investor-modal";
 import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
-import { computeInvestorProfit } from "@/lib/investor";
+import { computeInvestorProfit, sortInvestorsOssFirst } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { INVESTORS_MANAGE_ROLES, INVESTORS_VIEW_ROLES } from "@/lib/rbac";
 
@@ -29,6 +29,7 @@ export default async function InvestorsPage() {
   ]);
 
   const paidByInvestor = new Map(payouts.map((row) => [row.investorId, row._sum.amountUSD ?? 0]));
+  const investorsSorted = sortInvestorsOssFirst(investors);
 
   return (
     <section className="grid gap-4">
@@ -59,7 +60,7 @@ export default async function InvestorsPage() {
             </tr>
           </thead>
           <tbody>
-            {investors.map((investor) => {
+            {investorsSorted.map((investor) => {
               const invested = investor.investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
               const profit = investor.investments.reduce(
                 (sum, row) => sum + computeInvestorProfit(row.container.netProfitUSD, row.percentageShare),

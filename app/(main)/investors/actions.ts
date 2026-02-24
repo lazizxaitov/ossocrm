@@ -1,11 +1,11 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getRequiredSession } from "@/lib/auth";
 import { toNumber } from "@/lib/currency";
 import { assertOpenPeriodForDate } from "@/lib/financial-period";
-import { recalculateContainerInvestmentShares } from "@/lib/investor";
+import { computeInvestorProfit, recalculateContainerInvestmentShares } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { INVESTORS_MANAGE_ROLES } from "@/lib/rbac";
 
@@ -120,6 +120,25 @@ export async function createInvestorPayoutAction(formData: FormData) {
       if (!container || !investment) {
         throw new Error("Инвестор не привязан к контейнеру.");
       }
+      if (container.status === "IN_TRANSIT") {
+        throw new Error("Выплата инвестору доступна только после прибытия контейнера.");
+      }
+
+      const soldItems = await tx.saleItem.findMany({
+        where: { containerItem: { containerId } },
+        select: {
+          quantity: true,
+          salePricePerUnitUSD: true,
+          costPerUnitUSD: true,
+          returnItems: { select: { quantity: true } },
+        },
+      });
+
+      const realizedSalesProfitUSD = soldItems.reduce((sum, item) => {
+        const returnedQty = item.returnItems.reduce((retSum, row) => retSum + row.quantity, 0);
+        const effectiveQty = Math.max(0, item.quantity - returnedQty);
+        return sum + effectiveQty * (item.salePricePerUnitUSD - item.costPerUnitUSD);
+      }, 0);
 
       const paid = (
         await tx.investorPayout.aggregate({
@@ -128,14 +147,11 @@ export async function createInvestorPayoutAction(formData: FormData) {
         })
       )._sum.amountUSD ?? 0;
 
-      // Выплата доступна по доле инвестора в контейнере,
-      // даже если контейнер еще не в прибыли.
-      const containerPoolUSD = container.totalPurchaseUSD + container.totalExpensesUSD;
-      const shareAmountUSD = (containerPoolUSD * investment.percentageShare) / 100;
+      const shareAmountUSD = computeInvestorProfit(realizedSalesProfitUSD, investment.percentageShare);
       const available = Math.max(0, shareAmountUSD - paid);
 
       if (amountUSD > available + 0.0001) {
-        throw new Error("Сумма выплаты превышает доступную сумму по доле инвестора.");
+        throw new Error("Сумма выплаты превышает доступную сумму из реальной прибыли.");
       }
 
       await tx.investorPayout.create({
