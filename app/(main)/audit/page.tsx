@@ -1,15 +1,16 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import { getRequiredSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { AUDIT_VIEW_ROLES } from "@/lib/rbac";
 import { ruAuditAction } from "@/lib/ru-labels";
 
 const ENTITY_LABELS: Record<string, string> = {
-  FinancialPeriod: "Финансовый период",
-  ContainerExpense: "Расход контейнера",
-  ExpenseCorrection: "Корректировка расхода",
-  Return: "Возврат",
-  Sale: "Продажа",
+  FinancialPeriod: "Р¤РёРЅР°РЅСЃРѕРІС‹Р№ РїРµСЂРёРѕРґ",
+  ContainerExpense: "Р Р°СЃС…РѕРґ РєРѕРЅС‚РµР№РЅРµСЂР°",
+  OperatingExpense: "Операционный расход",
+  ExpenseCorrection: "РљРѕСЂСЂРµРєС‚РёСЂРѕРІРєР° СЂР°СЃС…РѕРґР°",
+  Return: "Р’РѕР·РІСЂР°С‚",
+  Sale: "РџСЂРѕРґР°Р¶Р°",
 };
 
 function ruEntityType(value: string) {
@@ -31,18 +32,18 @@ export default async function AuditPage() {
   return (
     <section className="grid gap-4">
       <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
-        <h2 className="text-xl font-semibold text-slate-900">Журнал действий</h2>
-        <p className="mt-1 text-sm text-slate-600">Прозрачность изменений по системе.</p>
+        <h2 className="text-xl font-semibold text-slate-900">Р–СѓСЂРЅР°Р» РґРµР№СЃС‚РІРёР№</h2>
+        <p className="mt-1 text-sm text-slate-600">РџСЂРѕР·СЂР°С‡РЅРѕСЃС‚СЊ РёР·РјРµРЅРµРЅРёР№ РїРѕ СЃРёСЃС‚РµРјРµ.</p>
       </article>
 
       <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
         <table className="w-full text-left text-sm">
           <thead className="bg-[var(--surface-soft)] text-slate-600">
             <tr>
-              <th className="px-3 py-2 font-medium">Пользователь</th>
-              <th className="px-3 py-2 font-medium">Действие</th>
-              <th className="px-3 py-2 font-medium">Дата</th>
-              <th className="px-3 py-2 font-medium">Объект</th>
+              <th className="px-3 py-2 font-medium">РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ</th>
+              <th className="px-3 py-2 font-medium">Р”РµР№СЃС‚РІРёРµ</th>
+              <th className="px-3 py-2 font-medium">Р”Р°С‚Р°</th>
+              <th className="px-3 py-2 font-medium">РћР±СЉРµРєС‚</th>
             </tr>
           </thead>
           <tbody>
@@ -61,7 +62,7 @@ export default async function AuditPage() {
             {!logs.length ? (
               <tr>
                 <td className="px-3 py-6 text-center text-slate-500" colSpan={4}>
-                  Записей пока нет.
+                  Р—Р°РїРёСЃРµР№ РїРѕРєР° РЅРµС‚.
                 </td>
               </tr>
             ) : null}
@@ -71,3 +72,5 @@ export default async function AuditPage() {
     </section>
   );
 }
+
+

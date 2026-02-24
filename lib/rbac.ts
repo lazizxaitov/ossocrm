@@ -59,7 +59,6 @@ export const EXPENSES_VIEW_ROLES: SessionRole[] = [
   "SUPER_ADMIN",
   "ADMIN",
   "ACCOUNTANT",
-  "INVESTOR",
 ];
 
 export const EXPENSES_ADD_ROLES: SessionRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];

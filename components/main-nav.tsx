@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -9,6 +9,7 @@ import {
   CLIENTS_VIEW_ROLES,
   CONTAINERS_VIEW_ROLES,
   DASHBOARD_ROLES,
+  EXPENSES_VIEW_ROLES,
   INVESTOR_PORTAL_ROLES,
   INVESTORS_VIEW_ROLES,
   INVENTORY_SESSIONS_VIEW_ROLES,
@@ -73,6 +74,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
   const canViewSales = SALES_VIEW_ROLES.includes(role);
   const canViewWarehouse = WAREHOUSE_ROLES.includes(role);
   const canViewInvestors = INVESTORS_VIEW_ROLES.includes(role);
+  const canViewExpenses = EXPENSES_VIEW_ROLES.includes(role);
   const canViewInvestorPortal = INVESTOR_PORTAL_ROLES.includes(role);
   const canViewAudit = AUDIT_VIEW_ROLES.includes(role);
   const canViewPeriods = PERIODS_VIEW_ROLES.includes(role);
@@ -80,42 +82,43 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
 
   const mainLinks = useMemo(() => {
     const links: NavLink[] = [];
-    if (canViewInvestorPortal) links.push({ href: "/investor", label: "Мой кабинет" });
+    if (canViewInvestorPortal) links.push({ href: "/investor", label: "РњРѕР№ РєР°Р±РёРЅРµС‚" });
     return links;
   }, [canViewInvestorPortal]);
 
   const warehouseLinks = useMemo(() => {
     const links: NavLink[] = [];
-    if (canViewProducts) links.push({ href: "/categories", label: "Категории" });
-    if (canViewProducts) links.push({ href: "/vanities", label: "Тумбы" });
-    if (canViewProducts) links.push({ href: "/products", label: "Товары" });
-    if (canViewContainers) links.push({ href: "/containers", label: "Контейнеры" });
-    if (canViewWarehouse) links.push({ href: role === "WAREHOUSE" ? "/warehouse" : "/stock", label: "Склад" });
-    if (canViewInventorySessions) links.push({ href: "/inventory-sessions", label: "Инвентаризация" });
+    if (canViewProducts) links.push({ href: "/categories", label: "РљР°С‚РµРіРѕСЂРёРё" });
+    if (canViewProducts) links.push({ href: "/vanities", label: "РўСѓРјР±С‹" });
+    if (canViewProducts) links.push({ href: "/products", label: "РўРѕРІР°СЂС‹" });
+    if (canViewContainers) links.push({ href: "/containers", label: "РљРѕРЅС‚РµР№РЅРµСЂС‹" });
+    if (canViewWarehouse) links.push({ href: role === "WAREHOUSE" ? "/warehouse" : "/stock", label: "РЎРєР»Р°Рґ" });
+    if (canViewInventorySessions) links.push({ href: "/inventory-sessions", label: "РРЅРІРµРЅС‚Р°СЂРёР·Р°С†РёСЏ" });
     return links;
   }, [canViewProducts, canViewContainers, canViewWarehouse, canViewInventorySessions, role]);
 
   const salesLinks = useMemo(() => {
     const links: NavLink[] = [];
-    if (canViewClients) links.push({ href: "/clients", label: "Клиенты" });
-    if (canViewSales) links.push({ href: "/sales", label: "Продажи" });
+    if (canViewClients) links.push({ href: "/clients", label: "РљР»РёРµРЅС‚С‹" });
+    if (canViewSales) links.push({ href: "/sales", label: "РџСЂРѕРґР°Р¶Рё" });
     return links;
   }, [canViewClients, canViewSales]);
 
   const financeLinks = useMemo(() => {
     const links: NavLink[] = [];
-    if (canViewInvestors) links.push({ href: "/investors", label: "Инвесторы" });
-    if (canViewPeriods) links.push({ href: "/financial-periods", label: "Периоды" });
-    if (canViewAudit) links.push({ href: "/audit", label: "Журнал" });
+    if (canViewExpenses) links.push({ href: "/expenses", label: "Расходы" });
+    if (canViewInvestors) links.push({ href: "/investors", label: "РРЅРІРµСЃС‚РѕСЂС‹" });
+    if (canViewPeriods) links.push({ href: "/financial-periods", label: "РџРµСЂРёРѕРґС‹" });
+    if (canViewAudit) links.push({ href: "/audit", label: "Р–СѓСЂРЅР°Р»" });
     return links;
-  }, [canViewInvestors, canViewPeriods, canViewAudit]);
+  }, [canViewExpenses, canViewInvestors, canViewPeriods, canViewAudit]);
 
   const sections = useMemo<MenuSection[]>(
     () => [
-      { title: "Главное", caption: "Быстрый доступ", links: mainLinks },
-      { title: "Склад и товары", caption: "Остатки и контейнеры", links: warehouseLinks },
-      { title: "Продажи", caption: "Клиенты и реализации", links: salesLinks },
-      { title: "Финансы и контроль", caption: "Инвесторы и отчеты", links: financeLinks },
+      { title: "Р“Р»Р°РІРЅРѕРµ", caption: "Р‘С‹СЃС‚СЂС‹Р№ РґРѕСЃС‚СѓРї", links: mainLinks },
+      { title: "РЎРєР»Р°Рґ Рё С‚РѕРІР°СЂС‹", caption: "РћСЃС‚Р°С‚РєРё Рё РєРѕРЅС‚РµР№РЅРµСЂС‹", links: warehouseLinks },
+      { title: "РџСЂРѕРґР°Р¶Рё", caption: "РљР»РёРµРЅС‚С‹ Рё СЂРµР°Р»РёР·Р°С†РёРё", links: salesLinks },
+      { title: "Р¤РёРЅР°РЅСЃС‹ Рё РєРѕРЅС‚СЂРѕР»СЊ", caption: "РРЅРІРµСЃС‚РѕСЂС‹ Рё РѕС‚С‡РµС‚С‹", links: financeLinks },
     ].filter((section) => section.links.length > 0),
     [mainLinks, warehouseLinks, salesLinks, financeLinks],
   );
@@ -155,8 +158,8 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
   const settingsOpen = openMenu === "settings";
   const criticalAlerts = alerts.filter((alert) => alert.level === "critical");
   const tickerText = criticalAlerts.length
-    ? criticalAlerts.map((alert) => `ВАЖНО: ${alert.text}`).join(" • ")
-    : "Важных уведомлений нет";
+    ? criticalAlerts.map((alert) => `Р’РђР–РќРћ: ${alert.text}`).join(" вЂў ")
+    : "Р’Р°Р¶РЅС‹С… СѓРІРµРґРѕРјР»РµРЅРёР№ РЅРµС‚";
 
   return (
     <header
@@ -174,7 +177,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
                   : "border-[var(--border)] bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
-              Главная
+              Р“Р»Р°РІРЅР°СЏ
             </Link>
           ) : null}
           <div className="relative">
@@ -184,11 +187,11 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
               className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               aria-expanded={mainMenuOpen}
             >
-              Меню
+              РњРµРЅСЋ
             </button>
             {mainMenuOpen ? (
               <div className="absolute left-0 z-30 mt-2 w-[260px] rounded-xl border border-[var(--border)] bg-white p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.12)]">
-                <p className="px-2 py-1 text-[11px] font-semibold text-slate-700">Разделы</p>
+                <p className="px-2 py-1 text-[11px] font-semibold text-slate-700">Р Р°Р·РґРµР»С‹</p>
                 <div className="grid gap-1.5">
                   {sections.map((section) => (
                     <div key={section.title}>{renderSection(section)}</div>
@@ -222,7 +225,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
               className="relative rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               aria-expanded={notificationsOpen}
             >
-              Уведомления
+              РЈРІРµРґРѕРјР»РµРЅРёСЏ
               {alerts.length > 0 ? (
                 <span className="ml-2 rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
                   {alerts.length}
@@ -232,7 +235,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
             {notificationsOpen ? (
               <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-xl border border-[var(--border)] bg-white p-2 shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
                 <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Системные уведомления
+                  РЎРёСЃС‚РµРјРЅС‹Рµ СѓРІРµРґРѕРјР»РµРЅРёСЏ
                 </p>
                 <div className="mt-1 max-h-72 space-y-1 overflow-auto">
                   {alerts.map((alert, idx) => (
@@ -249,7 +252,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
                   ))}
                   {!alerts.length ? (
                     <p className="rounded-lg border border-[var(--border)] bg-slate-50 px-2 py-2 text-xs text-slate-600">
-                      Критичных уведомлений нет.
+                      РљСЂРёС‚РёС‡РЅС‹С… СѓРІРµРґРѕРјР»РµРЅРёР№ РЅРµС‚.
                     </p>
                   ) : null}
                 </div>
@@ -264,7 +267,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
               className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               aria-expanded={settingsOpen}
             >
-              Настройки
+              РќР°СЃС‚СЂРѕР№РєРё
             </button>
             {settingsOpen ? (
               <div className="absolute right-0 z-30 mt-2 w-[220px] rounded-xl border border-[var(--border)] bg-white p-2 shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
@@ -275,7 +278,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
                     onClick={() => setOpenMenu(null)}
                     className="block rounded-lg px-2 py-2 text-sm text-slate-700 hover:bg-slate-50"
                   >
-                    Настройки приложения
+                    РќР°СЃС‚СЂРѕР№РєРё РїСЂРёР»РѕР¶РµРЅРёСЏ
                   </Link>
                 ) : null}
                 <form action={logoutAction}>
@@ -283,7 +286,7 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
                     type="submit"
                     className="mt-1 w-full rounded-lg bg-slate-900 px-2 py-2 text-sm font-medium text-white hover:opacity-90"
                   >
-                    Выход
+                    Р’С‹С…РѕРґ
                   </button>
                 </form>
               </div>
@@ -294,3 +297,5 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
     </header>
   );
 }
+
+

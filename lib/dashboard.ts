@@ -65,6 +65,12 @@ export async function computeKpis(params: { from: Date; to: Date; containerId?: 
       },
     },
   });
+  const operatingExpenses = containerId
+    ? []
+    : await prisma.operatingExpense.findMany({
+        where: { spentAt: { gte: from, lte: to } },
+        select: { amountUSD: true },
+      });
 
   const debts = await prisma.sale.aggregate({
     where: {
@@ -95,6 +101,7 @@ export async function computeKpis(params: { from: Date; to: Date; containerId?: 
       }
     }
   }
+  totalExpenses += operatingExpenses.reduce((sum, row) => sum + row.amountUSD, 0);
 
   const netProfit = revenue - cogs - totalExpenses;
   const debtTotal = debts._sum.debtAmountUSD ?? 0;
