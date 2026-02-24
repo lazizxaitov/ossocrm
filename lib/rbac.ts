@@ -1,4 +1,4 @@
-import { SessionRole } from "@/lib/session-token";
+﻿import { SessionRole } from "@/lib/session-token";
 
 export const DASHBOARD_ROLES: SessionRole[] = [
   "SUPER_ADMIN",
@@ -55,11 +55,7 @@ export const INVESTORS_MANAGE_ROLES: SessionRole[] = ["SUPER_ADMIN", "ADMIN"];
 
 export const INVESTOR_PORTAL_ROLES: SessionRole[] = ["INVESTOR"];
 
-export const EXPENSES_VIEW_ROLES: SessionRole[] = [
-  "SUPER_ADMIN",
-  "ADMIN",
-  "ACCOUNTANT",
-];
+export const EXPENSES_VIEW_ROLES: SessionRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
 
 export const EXPENSES_ADD_ROLES: SessionRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
 
