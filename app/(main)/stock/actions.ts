@@ -39,7 +39,7 @@ export async function addStockOutsideContainerAction(
 ): Promise<AddStockOutsideContainerState> {
   const session = await getRequiredSession();
   if (session.role !== "SUPER_ADMIN") {
-    return { error: "Только SUPER_ADMIN может добавлять товар вне контейнера.", success: null };
+    return { error: "Только суперадминистратор может добавлять товар вне контейнера.", success: null };
   }
 
   const reason = String(formData.get("reason") ?? "").trim();
@@ -232,7 +232,7 @@ export async function updateStockItemAction(
 ): Promise<ManageStockItemState> {
   const session = await getRequiredSession();
   if (session.role !== "SUPER_ADMIN") {
-    return { error: "Только SUPER_ADMIN может изменять позиции склада.", success: null };
+    return { error: "Только суперадминистратор может изменять позиции склада.", success: null };
   }
 
   const id = String(formData.get("id") ?? "").trim();
@@ -278,7 +278,7 @@ export async function deleteStockItemAction(
 ): Promise<ManageStockItemState> {
   const session = await getRequiredSession();
   if (session.role !== "SUPER_ADMIN") {
-    return { error: "Только SUPER_ADMIN может удалять позиции склада.", success: null };
+    return { error: "Только суперадминистратор может удалять позиции склада.", success: null };
   }
 
   const id = String(formData.get("id") ?? "").trim();

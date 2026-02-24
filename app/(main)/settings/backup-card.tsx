@@ -58,7 +58,7 @@ export function BackupCard({ lastBackupLabel, autoBackups, canRestore }: BackupC
             Восстановить
           </button>
         ) : (
-          <span className="self-center text-xs text-slate-500">Восстановление доступно только SUPER_ADMIN.</span>
+          <span className="self-center text-xs text-slate-500">Восстановление доступно только суперадминистратору.</span>
         )}
       </div>
 

@@ -6,6 +6,7 @@ import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { CONTAINERS_MANAGE_ROLES, CONTAINERS_VIEW_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 
 export default async function ContainersPage() {
   const session = await getRequiredSession();
@@ -108,7 +109,7 @@ export default async function ContainersPage() {
               return (
                 <tr key={container.id} className="border-t border-[var(--border)]">
                   <td className="px-3 py-2 font-medium text-slate-800">{container.name}</td>
-                  <td className="px-3 py-2 text-slate-700">{container.status}</td>
+                  <td className="px-3 py-2 text-slate-700">{ruStatus(container.status)}</td>
                   {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(container.totalPurchaseUSD)}</td> : null}
                   {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(container.totalExpensesUSD)}</td> : null}
                   {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(container.netProfitUSD)}</td> : null}

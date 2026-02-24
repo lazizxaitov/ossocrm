@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getPeriodReportData } from "@/lib/period-report";
 import { PERIODS_VIEW_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -19,7 +20,7 @@ export async function GET(_: Request, { params }: RouteParams) {
 
   const rows = [
     `Период,${String(report.period.month).padStart(2, "0")}.${report.period.year}`,
-    `Статус,${report.period.status}`,
+    `Статус,${ruStatus(report.period.status)}`,
     `Диапазон,${report.range.from.toLocaleDateString("ru-RU")} - ${report.range.to.toLocaleDateString("ru-RU")}`,
     "",
     "KPI,Значение USD",
@@ -32,9 +33,9 @@ export async function GET(_: Request, { params }: RouteParams) {
     "",
     "Сводка,Значение",
     `Продаж,${report.summary.salesCount}`,
-    `Продаж COMPLETED,${report.summary.completedSales}`,
-    `Продаж PARTIALLY_PAID,${report.summary.partialSales}`,
-    `Продаж DEBT,${report.summary.debtSales}`,
+    `Продаж завершено,${report.summary.completedSales}`,
+    `Продаж частично оплачено,${report.summary.partialSales}`,
+    `Продаж в долг,${report.summary.debtSales}`,
     `Просроченных долгов,${report.summary.overdueDebtCount}`,
     `Сумма просроченного долга USD,${report.summary.overdueDebtAmount.toFixed(2)}`,
     `Расходов,${report.summary.expensesCount}`,
@@ -44,13 +45,13 @@ export async function GET(_: Request, { params }: RouteParams) {
     `Инвентаризаций с расхождениями,${report.summary.discrepancySessionsCount}`,
     "",
     "Продажи",
-    "Invoice,Дата,Клиент,Статус,Товарных позиций,Итого USD,Оплачено USD,Долг USD,Срок оплаты",
+    "Счет,Дата,Клиент,Статус,Товарных позиций,Итого USD,Оплачено USD,Долг USD,Срок оплаты",
     ...report.sales.map((row) =>
       [
         row.invoiceNumber,
         row.createdAt.toLocaleDateString("ru-RU"),
         row.clientName,
-        row.status,
+        ruStatus(row.status),
         row.itemsCount,
         row.totalAmountUSD.toFixed(2),
         row.paidAmountUSD.toFixed(2),
@@ -65,7 +66,7 @@ export async function GET(_: Request, { params }: RouteParams) {
       [
         row.createdAt.toLocaleDateString("ru-RU"),
         row.containerName,
-        row.category,
+        ruStatus(row.category),
         row.title,
         row.amountUSD.toFixed(2),
         row.correctionSumUSD.toFixed(2),
@@ -83,7 +84,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     "Инвентаризации",
     "Дата,Название,Статус,Расхождения",
     ...report.inventory.map((row) =>
-      [row.createdAt.toLocaleDateString("ru-RU"), row.title, row.status, row.discrepancyCount].join(","),
+      [row.createdAt.toLocaleDateString("ru-RU"), row.title, ruStatus(row.status), row.discrepancyCount].join(","),
     ),
   ];
 

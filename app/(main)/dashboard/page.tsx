@@ -15,6 +15,7 @@ import { formatUsd } from "@/lib/currency";
 import { getCurrentFinancialPeriod } from "@/lib/financial-period";
 import { prisma } from "@/lib/prisma";
 import { DASHBOARD_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 import { redirect } from "next/navigation";
 
 type DashboardPageProps = {
@@ -69,7 +70,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Аналитика</p>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-900">Главный Dashboard</h2>
+            <h2 className="mt-1 text-2xl font-semibold text-slate-900">Главная панель</h2>
           </div>
           <DashboardFilterPopover
             range={range}
@@ -129,7 +130,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <td className="px-3 py-2 text-slate-700">{formatUsd(row.sold)}</td>
                 <td className="px-3 py-2 text-slate-700">{formatUsd(row.expenses)}</td>
                 <td className="px-3 py-2 text-slate-700">{formatUsd(row.profit)}</td>
-                <td className="px-3 py-2 text-slate-700">{row.status}</td>
+                <td className="px-3 py-2 text-slate-700">{ruStatus(row.status)}</td>
               </tr>
             ))}
           </tbody>

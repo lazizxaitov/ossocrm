@@ -6,6 +6,7 @@ import { computeKpis, rangeFromPeriod } from "@/lib/dashboard";
 import { formatUsd } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { PERIODS_MANAGE_ROLES, PERIODS_UNLOCK_ROLES, PERIODS_VIEW_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 
 type FinancialPeriodsPageProps = {
   searchParams: Promise<{ error?: string; success?: string }>;
@@ -101,7 +102,7 @@ export default async function FinancialPeriodsPage({ searchParams }: FinancialPe
                 <td className="px-3 py-2 text-slate-800">
                   {String(period.month).padStart(2, "0")}.{period.year}
                 </td>
-                <td className="px-3 py-2 text-slate-700">{period.status}</td>
+                <td className="px-3 py-2 text-slate-700">{ruStatus(period.status)}</td>
                 <td className="px-3 py-2 text-slate-700">{formatUsd(profit)}</td>
                 <td className="px-3 py-2 text-slate-700">
                   {period.lockedBy ? `${period.lockedBy.name} (${period.lockedBy.login})` : "—"}

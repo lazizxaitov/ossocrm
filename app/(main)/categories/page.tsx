@@ -1,10 +1,7 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  deleteCategoryAction,
-  updateCategoryAction,
-} from "@/app/(main)/categories/actions";
 import { CreateCategoryModal } from "@/app/(main)/categories/create-category-modal";
+import { EditCategoryModal } from "@/app/(main)/categories/edit-category-modal";
 import { getRequiredSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PRODUCTS_MANAGE_ROLES, PRODUCTS_VIEW_ROLES } from "@/lib/rbac";
@@ -98,38 +95,7 @@ export default async function CategoriesPage({ searchParams }: CategoriesPagePro
                 <td className="px-3 py-2 text-slate-700">{category._count.products}</td>
                 {canManage ? (
                   <td className="px-3 py-2">
-                    <div className="grid gap-2">
-                      <form action={updateCategoryAction} className="grid gap-2 md:grid-cols-3">
-                        <input type="hidden" name="id" value={category.id} />
-                        <input
-                          name="name"
-                          defaultValue={category.name}
-                          className="rounded border border-[var(--border)] px-2 py-1"
-                          required
-                        />
-                        <input
-                          name="description"
-                          defaultValue={category.description ?? ""}
-                          placeholder="Описание"
-                          className="rounded border border-[var(--border)] px-2 py-1"
-                        />
-                        <button
-                          type="submit"
-                          className="rounded bg-[var(--accent)] px-2 py-1 font-medium text-white hover:opacity-90"
-                        >
-                          Сохранить
-                        </button>
-                      </form>
-                      <form action={deleteCategoryAction}>
-                        <input type="hidden" name="id" value={category.id} />
-                        <button
-                          type="submit"
-                          className="rounded border border-rose-300 px-2 py-1 text-sm font-medium text-rose-700 hover:bg-rose-50"
-                        >
-                          Удалить
-                        </button>
-                      </form>
-                    </div>
+                    <EditCategoryModal id={category.id} name={category.name} description={category.description} />
                   </td>
                 ) : null}
               </tr>

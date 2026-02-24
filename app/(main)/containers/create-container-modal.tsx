@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useActionState, useMemo, useState } from "react";
 import { createContainerAction, type CreateContainerFormState } from "@/app/(main)/containers/actions";
+import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
 import { CustomDateInput } from "@/components/custom-date-input";
 import { CustomSelect } from "@/components/custom-select";
 
@@ -70,6 +71,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   const initialState: CreateContainerFormState = { error: null, success: false };
   const [state, formAction, isPending] = useActionState(createContainerAction, initialState);
   const [open, setOpen] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -241,6 +243,10 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
     addProductToContainer(product);
   }
 
+  function requestCloseMainModal() {
+    setConfirmCloseOpen(true);
+  }
+
   return (
     <>
       <button
@@ -252,7 +258,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/40 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/40 p-4" onClick={requestCloseMainModal}>
           <div
             className="max-h-[95vh] w-full max-w-6xl overflow-auto rounded-2xl bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
@@ -393,7 +399,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={requestCloseMainModal}
                   disabled={isPending}
                   className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
@@ -414,6 +420,19 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
           </div>
         </div>
       ) : null}
+      <CustomConfirmDialog
+        open={confirmCloseOpen}
+        title="Закрыть создание контейнера"
+        message="Данные формы будут потеряны. Закрыть окно?"
+        confirmLabel="Закрыть"
+        cancelLabel="Остаться"
+        danger
+        onCancel={() => setConfirmCloseOpen(false)}
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          setOpen(false);
+        }}
+      />
 
       {itemsModalOpen ? (
         <div className="fixed inset-0 z-50 bg-slate-900/50" onClick={() => setItemsModalOpen(false)}>

@@ -56,8 +56,13 @@ export async function GET(_: Request, { params }: RouteParams) {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+  const safeText = (value: string) =>
+    String(value ?? "")
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "?");
+
   const draw = (text: string, x: number, y: number, size = 10, isBold = false) => {
-    page.drawText(text, {
+    page.drawText(safeText(text), {
       x,
       y,
       size,
@@ -69,19 +74,19 @@ export async function GET(_: Request, { params }: RouteParams) {
   let y = 800;
   draw("OSSO", 40, y, 18, true);
   y -= 24;
-  draw("Invoice", 40, y, 14, true);
+  draw("Schet", 40, y, 14, true);
   y -= 18;
-  draw(`Номер: ${sale.invoiceNumber}`, 40, y);
+  draw(`Nomer: ${sale.invoiceNumber}`, 40, y);
   y -= 14;
-  draw(`Дата: ${new Date(sale.createdAt).toLocaleString("ru-RU")}`, 40, y);
+  draw(`Data: ${new Date(sale.createdAt).toLocaleString("ru-RU")}`, 40, y);
   y -= 14;
-  draw(`Клиент: ${sale.client.name}`, 40, y);
+  draw(`Klient: ${sale.client.name}`, 40, y);
   y -= 26;
 
-  draw("Товар", 40, y, 10, true);
-  draw("Кол-во", 290, y, 10, true);
-  draw("Цена/ед.", 360, y, 10, true);
-  draw("Сумма", 470, y, 10, true);
+  draw("Tovar", 40, y, 10, true);
+  draw("Kol-vo", 290, y, 10, true);
+  draw("Cena", 360, y, 10, true);
+  draw("Summa", 470, y, 10, true);
   y -= 12;
   page.drawLine({
     start: { x: 40, y },
@@ -109,19 +114,19 @@ export async function GET(_: Request, { params }: RouteParams) {
   });
   y -= 18;
 
-  draw(`Итого: ${formatUsd(sale.totalAmountUSD)}`, 360, y, 11, true);
+  draw(`Itogo: ${formatUsd(sale.totalAmountUSD)}`, 360, y, 11, true);
   y -= 14;
-  draw(`Сантехника: ${formatUsd(totalsByCategory.plumbing)}`, 320, y, 10);
+  draw(`Santekhnika: ${formatUsd(totalsByCategory.plumbing)}`, 320, y, 10);
   y -= 12;
-  draw(`Тумбы: ${formatUsd(totalsByCategory.vanity)}`, 320, y, 10);
+  draw(`Tumby: ${formatUsd(totalsByCategory.vanity)}`, 320, y, 10);
   y -= 12;
   if (totalsByCategory.accessory > 0) {
-    draw(`Аксессуары: ${formatUsd(totalsByCategory.accessory)}`, 320, y, 10);
+    draw(`Aksessuary: ${formatUsd(totalsByCategory.accessory)}`, 320, y, 10);
     y -= 12;
   }
-  draw(`Оплачено: ${formatUsd(sale.paidAmountUSD)}`, 360, y, 11, true);
+  draw(`Oplacheno: ${formatUsd(sale.paidAmountUSD)}`, 360, y, 11, true);
   y -= 14;
-  draw(`Долг: ${formatUsd(sale.debtAmountUSD)}`, 360, y, 11, true);
+  draw(`Dolg: ${formatUsd(sale.debtAmountUSD)}`, 360, y, 11, true);
 
   const bytes = await pdf.save();
   return new NextResponse(new Uint8Array(bytes), {

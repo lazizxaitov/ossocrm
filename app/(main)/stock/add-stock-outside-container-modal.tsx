@@ -6,6 +6,7 @@ import {
   addStockOutsideContainerAction,
   type AddStockOutsideContainerState,
 } from "@/app/(main)/stock/actions";
+import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
 
 type ProductOption = {
   id: string;
@@ -13,6 +14,7 @@ type ProductOption = {
   sku: string;
   size: string;
   imagePath?: string | null;
+  costPriceUSD: number;
   basePriceUSD: number;
   categoryName: string;
 };
@@ -52,6 +54,7 @@ function recalcTotalCbm(row: ItemRow) {
 
 export function AddStockOutsideContainerModal({ products }: AddStockOutsideContainerModalProps) {
   const [open, setOpen] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const initialState: AddStockOutsideContainerState = { error: null, success: null };
   const [state, formAction, pending] = useActionState(addStockOutsideContainerAction, initialState);
   const [search, setSearch] = useState("");
@@ -144,7 +147,7 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
           quantity: "1",
           sizeLabel: product.size || "",
           color: "",
-          unitPriceUSD: "",
+          unitPriceUSD: product.costPriceUSD > 0 ? String(product.costPriceUSD) : "",
           salePriceUSD: product.basePriceUSD > 0 ? String(product.basePriceUSD) : "",
           lineTotalUSD: "",
           cbm: "",
@@ -157,6 +160,10 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
       ];
     });
     setNextKey((value) => value + 1);
+  }
+
+  function requestClose() {
+    setConfirmCloseOpen(true);
   }
 
   function handleDropProduct(productId: string) {
@@ -193,7 +200,7 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 bg-slate-900/50" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-slate-900/50" onClick={requestClose}>
           <div
             className="flex h-full w-full flex-col bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
@@ -505,7 +512,7 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
               <div className="mt-3 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={requestClose}
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
                 >
                   Отмена
@@ -522,6 +529,19 @@ export function AddStockOutsideContainerModal({ products }: AddStockOutsideConta
           </div>
         </div>
       ) : null}
+      <CustomConfirmDialog
+        open={confirmCloseOpen}
+        title="Закрыть добавление товара"
+        message="Данные формы будут потеряны. Закрыть окно?"
+        confirmLabel="Закрыть"
+        cancelLabel="Остаться"
+        danger
+        onCancel={() => setConfirmCloseOpen(false)}
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          setOpen(false);
+        }}
+      />
     </>
   );
 }

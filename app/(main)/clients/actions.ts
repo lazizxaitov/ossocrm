@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { getRequiredSession } from "@/lib/auth";
 import { toNumber } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
@@ -54,6 +55,9 @@ export async function createClientAction(formData: FormData) {
     revalidatePath("/sales");
     redirectWithSuccess("Клиент создан.");
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     redirectWithError(error instanceof Error ? error.message : "Не удалось создать клиента.");
   }
 }
@@ -93,6 +97,9 @@ export async function updateClientAction(formData: FormData) {
     revalidatePath("/sales");
     redirectWithSuccess("Клиент обновлен.");
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
     redirectWithError(error instanceof Error ? error.message : "Не удалось обновить клиента.");
   }
 }

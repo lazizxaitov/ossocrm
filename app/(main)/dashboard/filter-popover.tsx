@@ -30,6 +30,9 @@ export function DashboardFilterPopover({
 
   useEffect(() => {
     function onMouseDown(event: MouseEvent) {
+      const target = event.target as Element | null;
+      const inDatePopup = target?.closest(".osso-date-popup,[data-custom-date-popup='true']");
+      if (inDatePopup) return;
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }
@@ -66,7 +69,7 @@ export function DashboardFilterPopover({
                 { value: "today", label: "Сегодня" },
                 { value: "7d", label: "7 дней" },
                 { value: "month", label: "Месяц" },
-                { value: "custom", label: "Custom период" },
+                { value: "custom", label: "Произвольный период" },
               ]}
             />
             <CustomDateInput name="from" defaultValue={from ?? ""} placeholder="Дата от" />

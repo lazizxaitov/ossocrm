@@ -232,6 +232,10 @@ export function CreateSaleModal({
     const item = stockMap.get(row.containerItemId);
     return item ? isAccessoryItem(item) : false;
   });
+  const builderAccessoryRows = rows.filter((row) => {
+    const item = stockMap.get(row.containerItemId);
+    return item ? isAccessoryItem(item) : false;
+  });
   const hasUnsavedDraft =
     Boolean(clientId.trim()) ||
     saleMode !== "IMMEDIATE" ||
@@ -338,6 +342,26 @@ export function CreateSaleModal({
     if (itemSlot !== slot) return;
 
     setRows((prev) => {
+      if (slot === "ACCESSORY") {
+        const existing = prev.find((row) => row.containerItemId === item.containerItemId);
+        if (existing) {
+          return prev.map((row) =>
+            row.containerItemId === item.containerItemId
+              ? { ...row, quantity: String(Math.max(1, Math.floor(toNumber(row.quantity))) + 1) }
+              : row,
+          );
+        }
+        return [
+          ...prev,
+          {
+            key: getNextRowKey(),
+            containerItemId: item.containerItemId,
+            quantity: "1",
+            salePricePerUnitUSD: item.basePriceUSD > 0 ? String(item.basePriceUSD) : "",
+          },
+        ];
+      }
+
       const next = prev.filter((row) => {
         const selected = stockMap.get(row.containerItemId);
         if (!selected) return true;
@@ -378,7 +402,7 @@ export function CreateSaleModal({
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={closeMainModalWithConfirm}>
           <div className="max-h-[95vh] w-full max-w-5xl overflow-auto rounded-2xl bg-white p-4 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-900">{modalTitle}</h3>
-            <p className="text-sm text-slate-600">Invoice генерируется автоматически и не редактируется.</p>
+            <p className="text-sm text-slate-600">Счет генерируется автоматически и не редактируется.</p>
 
             <form
               action={formAction}
@@ -698,7 +722,12 @@ export function CreateSaleModal({
                       {([
                         { slot: "SINK", title: "Верхний квадрат (раковина)", row: builderSinkRow, empty: "Перетащите раковину" },
                         { slot: "VANITY", title: "Нижний квадрат (тумба)", row: builderVanityRow, empty: "Перетащите тумбу" },
-                        { slot: "ACCESSORY", title: "Квадрат аксессуаров", row: builderAccessoryRow, empty: "Перетащите аксессуар" },
+                        {
+                          slot: "ACCESSORY",
+                          title: "Квадрат аксессуаров",
+                          row: builderAccessoryRow,
+                          empty: "Перетащите аксессуар",
+                        },
                       ] as const).map((block) => (
                         <div key={block.slot} className="grid gap-1.5">
                           <p className="text-[11px] font-medium text-slate-600">{block.title}</p>
@@ -742,6 +771,9 @@ export function CreateSaleModal({
                                       />
                                     ) : null}
                                     <p className="line-clamp-2 max-w-[90%] text-xs font-medium text-slate-800">{selected.productName}</p>
+                                    {block.slot === "ACCESSORY" && builderAccessoryRows.length > 1 ? (
+                                      <p className="text-[10px] text-slate-500">+{builderAccessoryRows.length - 1} шт.</p>
+                                    ) : null}
                                   </div>
                                 );
                               })()

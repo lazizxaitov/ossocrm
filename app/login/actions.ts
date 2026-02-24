@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -31,7 +31,7 @@ export async function loginAction(_: LoginState, formData: FormData): Promise<Lo
   }
 
   if (entryPoint === "warehouse" && user.role !== Role.WAREHOUSE) {
-    return { error: "Вход в склад доступен только роли WAREHOUSE." };
+    return { error: "Вход в склад доступен только роли Склад." };
   }
 
   const token = await signSessionToken({

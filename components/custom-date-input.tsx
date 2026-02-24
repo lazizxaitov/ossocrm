@@ -80,6 +80,12 @@ export function CustomDateInput({
     left: 0,
   });
 
+  useEffect(() => {
+    if (!isControlled) {
+      setInternalValue(defaultValue ?? "");
+    }
+  }, [defaultValue, isControlled]);
+
   function recalcPopupPosition() {
     const anchor = buttonRef.current;
     if (!anchor) return;
@@ -206,8 +212,9 @@ export function CustomDateInput({
         ? createPortal(
             <div
               ref={popupRef}
+              data-custom-date-popup="true"
               style={{ top: popupPos.top, left: popupPos.left }}
-              className="fixed z-[120] w-[280px] rounded-xl border border-[var(--border)] bg-white p-2 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
+              className="osso-date-popup fixed z-[120] w-[280px] rounded-xl border border-[var(--border)] bg-white p-2 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
             >
           <div className="mb-2 flex items-center justify-between">
             <button

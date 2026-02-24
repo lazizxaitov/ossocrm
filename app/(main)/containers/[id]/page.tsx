@@ -17,6 +17,7 @@ import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
 import { computeInvestorProfit } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
+import { ruStatus } from "@/lib/ru-labels";
 import {
   CONTAINERS_MANAGE_ROLES,
   CONTAINERS_VIEW_ROLES,
@@ -96,7 +97,7 @@ export default async function ContainerDetailPage({ params }: ContainerDetailPag
           <div>
             <h2 className="text-xl font-semibold text-slate-900">{container.name}</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Статус: <span className="font-medium text-slate-800">{container.status}</span>
+              Статус: <span className="font-medium text-slate-800">{ruStatus(container.status)}</span>
             </p>
           </div>
           <div className="flex items-center gap-2">

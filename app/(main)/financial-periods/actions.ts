@@ -59,7 +59,7 @@ export async function lockFinancialPeriodAction(formData: FormData) {
 export async function unlockFinancialPeriodAction(formData: FormData) {
   const session = await getRequiredSession();
   if (!PERIODS_UNLOCK_ROLES.includes(session.role)) {
-    redirectWithError("Разблокировка доступна только SUPER_ADMIN.");
+    redirectWithError("Разблокировка доступна только суперадминистратору.");
   }
 
   const periodId = String(formData.get("periodId") ?? "");

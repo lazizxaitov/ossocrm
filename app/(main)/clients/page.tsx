@@ -1,7 +1,8 @@
 ﻿import Link from "next/link";
 import { redirect } from "next/navigation";
-import { updateClientAction } from "@/app/(main)/clients/actions";
+import { ClientDetailsModal } from "@/app/(main)/clients/client-details-modal";
 import { CreateClientModal } from "@/app/(main)/clients/create-client-modal";
+import { EditClientModal } from "@/app/(main)/clients/edit-client-modal";
 import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
@@ -41,6 +42,37 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
       take: PAGE_SIZE,
     }),
   ]);
+
+  const clientIds = clients.map((client) => client.id);
+  const salesByClient = clientIds.length
+    ? await prisma.sale.findMany({
+        where: { clientId: { in: clientIds } },
+        select: {
+          clientId: true,
+          totalAmountUSD: true,
+          paidAmountUSD: true,
+          debtAmountUSD: true,
+        },
+      })
+    : [];
+
+  const statsByClient = new Map<
+    string,
+    { purchasesCount: number; totalPurchases: number; totalPaid: number; totalDebt: number }
+  >();
+  for (const sale of salesByClient) {
+    const current = statsByClient.get(sale.clientId) ?? {
+      purchasesCount: 0,
+      totalPurchases: 0,
+      totalPaid: 0,
+      totalDebt: 0,
+    };
+    current.purchasesCount += 1;
+    current.totalPurchases += sale.totalAmountUSD;
+    current.totalPaid += sale.paidAmountUSD;
+    current.totalDebt += sale.debtAmountUSD;
+    statsByClient.set(sale.clientId, current);
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const prevPage = Math.max(1, currentPage - 1);
@@ -92,58 +124,62 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
               <th className="px-3 py-2 font-medium">Адрес</th>
               <th className="px-3 py-2 font-medium">Комментарий</th>
               <th className="px-3 py-2 font-medium">Лимит USD</th>
+              <th className="px-3 py-2 font-medium">Подробнее</th>
               {canManage ? <th className="px-3 py-2 font-medium">Изменить</th> : null}
             </tr>
           </thead>
           <tbody>
-            {clients.map((client) => (
-              <tr key={client.id} className="border-t border-[var(--border)] align-top">
-                <td className="px-3 py-2 text-slate-800">{client.name}</td>
-                <td className="px-3 py-2 text-slate-700">{client.company ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-700">{client.inn ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-700">{client.phone ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-600">{client.address ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-600">{client.comment ?? "—"}</td>
-                <td className="px-3 py-2 text-slate-700">{formatUsd(client.creditLimitUSD)}</td>
-                {canManage ? (
+            {clients.map((client) => {
+              const stat = statsByClient.get(client.id) ?? {
+                purchasesCount: 0,
+                totalPurchases: 0,
+                totalPaid: 0,
+                totalDebt: 0,
+              };
+              return (
+                <tr key={client.id} className="border-t border-[var(--border)] align-top">
+                  <td className="px-3 py-2 text-slate-800">{client.name}</td>
+                  <td className="px-3 py-2 text-slate-700">{client.company ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{client.inn ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{client.phone ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-600">{client.address ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-600">{client.comment ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{formatUsd(client.creditLimitUSD)}</td>
                   <td className="px-3 py-2">
-                    <form action={updateClientAction} className="grid gap-2 md:grid-cols-5">
-                      <input type="hidden" name="id" value={client.id} />
-                      <input name="name" defaultValue={client.name} required className="rounded border border-[var(--border)] px-2 py-1" />
-                      <input name="company" defaultValue={client.company ?? ""} placeholder="Компания" className="rounded border border-[var(--border)] px-2 py-1" />
-                      <input name="inn" defaultValue={client.inn ?? ""} placeholder="ИНН" className="rounded border border-[var(--border)] px-2 py-1" />
-                      <input name="phone" defaultValue={client.phone ?? ""} className="rounded border border-[var(--border)] px-2 py-1" />
-                      <input
-                        name="creditLimitUSD"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        defaultValue={client.creditLimitUSD}
-                        className="rounded border border-[var(--border)] px-2 py-1"
-                      />
-                      <button type="submit" className="rounded bg-[var(--accent)] px-2 py-1 font-medium text-white hover:opacity-90">
-                        Сохранить
-                      </button>
-                      <input
-                        name="address"
-                        defaultValue={client.address ?? ""}
-                        placeholder="Адрес"
-                        className="md:col-span-5 rounded border border-[var(--border)] px-2 py-1"
-                      />
-                      <input
-                        name="comment"
-                        defaultValue={client.comment ?? ""}
-                        placeholder="Комментарий"
-                        className="md:col-span-5 rounded border border-[var(--border)] px-2 py-1"
-                      />
-                    </form>
+                    <ClientDetailsModal
+                      name={client.name}
+                      company={client.company}
+                      inn={client.inn}
+                      phone={client.phone}
+                      address={client.address}
+                      comment={client.comment}
+                      creditLimitLabel={formatUsd(client.creditLimitUSD)}
+                      purchasesCount={stat.purchasesCount}
+                      totalPurchasesLabel={formatUsd(stat.totalPurchases)}
+                      totalPaidLabel={formatUsd(stat.totalPaid)}
+                      totalDebtLabel={formatUsd(stat.totalDebt)}
+                    />
                   </td>
-                ) : null}
-              </tr>
-            ))}
+                  {canManage ? (
+                    <td className="px-3 py-2">
+                      <EditClientModal
+                        id={client.id}
+                        name={client.name}
+                        company={client.company}
+                        inn={client.inn}
+                        phone={client.phone}
+                        address={client.address}
+                        comment={client.comment}
+                        creditLimitUSD={client.creditLimitUSD}
+                      />
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
             {!clients.length ? (
               <tr>
-                <td colSpan={canManage ? 8 : 7} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={canManage ? 9 : 8} className="px-3 py-6 text-center text-slate-500">
                   Ничего не найдено.
                 </td>
               </tr>
@@ -182,3 +218,4 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     </section>
   );
 }
+

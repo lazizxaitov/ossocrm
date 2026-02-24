@@ -7,18 +7,23 @@ import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { SALES_MANAGE_ROLES, SALES_VIEW_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 
 type SaleDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; success?: string }>;
 };
 
-export default async function SaleDetailPage({ params }: SaleDetailPageProps) {
+export default async function SaleDetailPage({ params, searchParams }: SaleDetailPageProps) {
   const session = await getRequiredSession();
   if (!SALES_VIEW_ROLES.includes(session.role)) {
     redirect("/dashboard");
   }
 
   const { id } = await params;
+  const query = await searchParams;
+  const error = (query.error ?? "").trim();
+  const success = (query.success ?? "").trim();
   const canManage = SALES_MANAGE_ROLES.includes(session.role);
 
   const sale = await prisma.sale.findUnique({
@@ -70,7 +75,7 @@ export default async function SaleDetailPage({ params }: SaleDetailPageProps) {
           <div>
             <h2 className="text-xl font-semibold text-slate-900">{sale.invoiceNumber}</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Клиент: {sale.client.name} | Статус: {sale.status}
+              Клиент: {sale.client.name} | Статус: {ruStatus(sale.status)}
             </p>
           </div>
           <div className="flex gap-2">
@@ -92,6 +97,13 @@ export default async function SaleDetailPage({ params }: SaleDetailPageProps) {
           </div>
         </div>
       </article>
+
+      {error ? (
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+      ) : null}
+      {success ? (
+        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
@@ -121,8 +133,8 @@ export default async function SaleDetailPage({ params }: SaleDetailPageProps) {
               <th className="px-3 py-2 font-medium">Товар</th>
               <th className="px-3 py-2 font-medium">Контейнер</th>
               <th className="px-3 py-2 font-medium">Кол-во</th>
-              <th className="px-3 py-2 font-medium">Себест./ед.</th>
-              <th className="px-3 py-2 font-medium">Цена/ед.</th>
+              <th className="px-3 py-2 font-medium">Себестоимость / ед.</th>
+              <th className="px-3 py-2 font-medium">Цена / ед.</th>
               <th className="px-3 py-2 font-medium">Сумма</th>
             </tr>
           </thead>

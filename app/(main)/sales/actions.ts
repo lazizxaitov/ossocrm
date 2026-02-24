@@ -2,6 +2,7 @@
 
 import { SaleStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getRequiredSession } from "@/lib/auth";
 import { recalculateContainerFinancials } from "@/lib/container-finance";
 import { nextDocumentNumber } from "@/lib/doc-number";
@@ -214,54 +215,62 @@ export async function createSaleAction(
 }
 
 export async function addPaymentAction(formData: FormData) {
-  const session = await getRequiredSession();
-  assertCanManage(session.role);
-
   const saleId = String(formData.get("saleId") ?? "");
-  const amountUSD = Math.max(0, toNumber(formData.get("amountUSD")) || 0);
-  const paymentDateRaw = String(formData.get("paymentDate") ?? "").trim();
+  try {
+    const session = await getRequiredSession();
+    assertCanManage(session.role);
 
-  if (!saleId || !Number.isFinite(amountUSD) || amountUSD <= 0) {
-    throw new Error("РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ РѕРїР»Р°С‚С‹.");
+    const amountUSD = Math.max(0, toNumber(formData.get("amountUSD")) || 0);
+    const paymentDateRaw = String(formData.get("paymentDate") ?? "").trim();
+
+    if (!saleId || !Number.isFinite(amountUSD) || amountUSD <= 0) {
+      throw new Error("Проверьте данные оплаты.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const sale = await tx.sale.findUnique({ where: { id: saleId } });
+      if (!sale) {
+        throw new Error("Продажа не найдена.");
+      }
+      await assertOpenPeriodById(sale.financialPeriodId);
+
+      const remainingDebt = Math.max(0, sale.debtAmountUSD);
+      const actualPayment = Math.min(remainingDebt, amountUSD);
+      if (actualPayment <= 0) {
+        throw new Error("По этой продаже долгов нет.");
+      }
+
+      const newPaid = sale.paidAmountUSD + actualPayment;
+      const newDebt = Math.max(0, sale.totalAmountUSD - newPaid);
+
+      await tx.payment.create({
+        data: {
+          saleId,
+          amountUSD: actualPayment,
+          paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : new Date(),
+          createdById: session.userId,
+        },
+      });
+
+      await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          paidAmountUSD: newPaid,
+          debtAmountUSD: newDebt,
+          status: computeSaleStatus(sale.totalAmountUSD, newPaid, newDebt),
+        },
+      });
+    });
+
+    revalidatePath("/sales");
+    revalidatePath(`/sales/${saleId}`);
+    redirect(`/sales/${saleId}?success=${encodeURIComponent("Оплата проведена.")}`);
+  } catch (error) {
+    if (saleId) {
+      redirect(`/sales/${saleId}?error=${encodeURIComponent(error instanceof Error ? error.message : "Не удалось провести оплату.")}`);
+    }
+    throw error;
   }
-
-  await prisma.$transaction(async (tx) => {
-    const sale = await tx.sale.findUnique({ where: { id: saleId } });
-    if (!sale) {
-      throw new Error("РџСЂРѕРґР°Р¶Р° РЅРµ РЅР°Р№РґРµРЅР°.");
-    }
-    await assertOpenPeriodById(sale.financialPeriodId);
-
-    const remainingDebt = Math.max(0, sale.debtAmountUSD);
-    const actualPayment = Math.min(remainingDebt, amountUSD);
-    if (actualPayment <= 0) {
-      throw new Error("РџРѕ РїСЂРѕРґР°Р¶Рµ РЅРµС‚ РґРѕР»РіР°.");
-    }
-
-    const newPaid = sale.paidAmountUSD + actualPayment;
-    const newDebt = Math.max(0, sale.totalAmountUSD - newPaid);
-
-    await tx.payment.create({
-      data: {
-        saleId,
-        amountUSD: actualPayment,
-        paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : new Date(),
-        createdById: session.userId,
-      },
-    });
-
-    await tx.sale.update({
-      where: { id: saleId },
-      data: {
-        paidAmountUSD: newPaid,
-        debtAmountUSD: newDebt,
-        status: computeSaleStatus(sale.totalAmountUSD, newPaid, newDebt),
-      },
-    });
-  });
-
-  revalidatePath("/sales");
-  revalidatePath(`/sales/${saleId}`);
 }
 
 export async function createReturnAction(formData: FormData) {

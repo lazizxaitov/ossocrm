@@ -6,6 +6,7 @@ import { formatUsd } from "@/lib/currency";
 import { getCurrentFinancialPeriod } from "@/lib/financial-period";
 import { prisma } from "@/lib/prisma";
 import { SALES_MANAGE_ROLES, SALES_VIEW_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 
 type SalesPageProps = {
   searchParams: Promise<{ q?: string }>;
@@ -54,7 +55,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Продажи</h2>
-            <p className="mt-1 text-sm text-slate-600">Продажи, долги, оплаты, возвраты и invoice.</p>
+            <p className="mt-1 text-sm text-slate-600">Продажи, долги, оплаты, возвраты и счет.</p>
             {salesLocked ? (
               <p className="mt-2 text-sm font-medium text-rose-700">
                 Месяц {String(currentPeriod.month).padStart(2, "0")}.{currentPeriod.year} закрыт. Новые продажи недоступны.
@@ -109,7 +110,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
           <input
             name="q"
             defaultValue={q}
-            placeholder="Поиск по Invoice / ID / клиенту"
+            placeholder="Поиск по номеру счета / ID / клиенту"
             className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
           />
           <button
@@ -125,7 +126,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
         <table className="w-full text-left text-sm">
           <thead className="bg-[var(--surface-soft)] text-slate-600">
             <tr>
-              <th className="px-3 py-2 font-medium">Invoice</th>
+              <th className="px-3 py-2 font-medium">Счет</th>
               <th className="px-3 py-2 font-medium">Клиент</th>
               <th className="px-3 py-2 font-medium">Итого USD</th>
               <th className="px-3 py-2 font-medium">Оплачено</th>
@@ -143,7 +144,7 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                 <td className="px-3 py-2 text-slate-700">{formatUsd(sale.totalAmountUSD)}</td>
                 <td className="px-3 py-2 text-slate-700">{formatUsd(sale.paidAmountUSD)}</td>
                 <td className="px-3 py-2 text-slate-700">{formatUsd(sale.debtAmountUSD)}</td>
-                <td className="px-3 py-2 text-slate-700">{sale.status}</td>
+                <td className="px-3 py-2 text-slate-700">{ruStatus(sale.status)}</td>
                 <td className="px-3 py-2 text-slate-600">{new Date(sale.createdAt).toLocaleString("ru-RU")}</td>
                 <td className="px-3 py-2">
                   <Link

@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { createCategoryAction } from "@/app/(main)/categories/actions";
+import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
 
 export function CreateCategoryModal() {
   const [open, setOpen] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   return (
     <>
@@ -17,7 +19,7 @@ export function CreateCategoryModal() {
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/40 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/40 p-4" onClick={() => setConfirmCloseOpen(true)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-900">Новая категория</h3>
             <p className="mt-1 text-xs text-slate-500">Заполните название и описание категории.</p>
@@ -43,7 +45,7 @@ export function CreateCategoryModal() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => setConfirmCloseOpen(true)}
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Отмена
@@ -53,6 +55,19 @@ export function CreateCategoryModal() {
           </div>
         </div>
       ) : null}
+      <CustomConfirmDialog
+        open={confirmCloseOpen}
+        title="Закрыть создание категории"
+        message="Данные формы будут потеряны. Закрыть окно?"
+        confirmLabel="Закрыть"
+        cancelLabel="Остаться"
+        danger
+        onCancel={() => setConfirmCloseOpen(false)}
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          setOpen(false);
+        }}
+      />
     </>
   );
 }

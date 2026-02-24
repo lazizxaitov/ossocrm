@@ -2,6 +2,7 @@
 import { getSession } from "@/lib/auth";
 import { getPeriodReportData } from "@/lib/period-report";
 import { PERIODS_VIEW_ROLES } from "@/lib/rbac";
+import { ruStatus } from "@/lib/ru-labels";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -85,7 +86,7 @@ export async function GET(_: Request, { params }: RouteParams) {
   </table>
 
   <h1>Отчет по финансовому периоду ${esc(monthLabel)}</h1>
-  <p><strong>Статус:</strong> ${esc(report.period.status)}</p>
+  <p><strong>Статус:</strong> ${esc(ruStatus(report.period.status))}</p>
   <p><strong>Диапазон:</strong> ${esc(report.range.from.toLocaleDateString("ru-RU"))} - ${esc(report.range.to.toLocaleDateString("ru-RU"))}</p>
 
   <h2>KPI</h2>
@@ -106,9 +107,9 @@ export async function GET(_: Request, { params }: RouteParams) {
     ["Метрика", "Значение"],
     [
       ["Продаж", String(report.summary.salesCount)],
-      ["Продаж COMPLETED", String(report.summary.completedSales)],
-      ["Продаж PARTIALLY_PAID", String(report.summary.partialSales)],
-      ["Продаж DEBT", String(report.summary.debtSales)],
+      ["Продаж завершено", String(report.summary.completedSales)],
+      ["Продаж частично оплачено", String(report.summary.partialSales)],
+      ["Продаж в долг", String(report.summary.debtSales)],
       ["Просроченных долгов", String(report.summary.overdueDebtCount)],
       ["Сумма просроченного долга USD", report.summary.overdueDebtAmount.toFixed(2)],
       ["Расходов", String(report.summary.expensesCount)],
@@ -122,12 +123,12 @@ export async function GET(_: Request, { params }: RouteParams) {
 
   <h2>Продажи</h2>
   ${table(
-    ["Invoice", "Дата", "Клиент", "Статус", "Позиции", "Итого USD", "Оплачено USD", "Долг USD", "Срок оплаты"],
+    ["Счет", "Дата", "Клиент", "Статус", "Позиции", "Итого USD", "Оплачено USD", "Долг USD", "Срок оплаты"],
     report.sales.map((row) => [
       row.invoiceNumber,
       row.createdAt.toLocaleDateString("ru-RU"),
       row.clientName,
-      row.status,
+      ruStatus(row.status),
       String(row.itemsCount),
       row.totalAmountUSD.toFixed(2),
       row.paidAmountUSD.toFixed(2),
@@ -142,7 +143,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     report.expenses.map((row) => [
       row.createdAt.toLocaleDateString("ru-RU"),
       row.containerName,
-      row.category,
+      ruStatus(row.category),
       row.title,
       row.amountUSD.toFixed(2),
       row.correctionSumUSD.toFixed(2),
@@ -168,7 +169,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     report.inventory.map((row) => [
       row.createdAt.toLocaleDateString("ru-RU"),
       row.title,
-      row.status,
+      ruStatus(row.status),
       String(row.discrepancyCount),
     ]),
   )}

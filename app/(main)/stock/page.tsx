@@ -85,6 +85,7 @@ export default async function StockPage({ searchParams }: StockPageProps) {
         sku: true,
         size: true,
         imagePath: true,
+        costPriceUSD: true,
         basePriceUSD: true,
         category: { select: { name: true } },
       },
@@ -140,6 +141,7 @@ export default async function StockPage({ searchParams }: StockPageProps) {
                 sku: product.sku,
                 size: product.size,
                 imagePath: product.imagePath,
+                costPriceUSD: product.costPriceUSD,
                 basePriceUSD: product.basePriceUSD,
                 categoryName: product.category?.name ?? "Без категории",
               }))}

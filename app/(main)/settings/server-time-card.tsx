@@ -88,7 +88,7 @@ export function ServerTimeCard({
           </button>
         ) : (
           <p className="text-sm font-medium text-slate-600">
-            Изменение даты и времени доступно только SUPER_ADMIN.
+            Изменение даты и времени доступно только суперадминистратору.
           </p>
         )}
       </form>

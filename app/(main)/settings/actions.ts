@@ -12,7 +12,7 @@ import { SETTINGS_ROLES } from "@/lib/rbac";
 export async function updateCurrencySettingAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Изменение курса доступно только SUPER_ADMIN.");
+    throw new Error("Изменение курса доступно только суперадминистратору.");
   }
 
   const rate = toNumber(formData.get("cnyToUsdRate"));
@@ -41,7 +41,7 @@ export async function updateCurrencySettingAction(formData: FormData) {
 export async function updateServerDateTimeAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Изменение даты и времени доступно только SUPER_ADMIN.");
+    throw new Error("Изменение даты и времени доступно только суперадминистратору.");
   }
 
   const serverTimeAuto = String(formData.get("serverTimeAuto") ?? "") === "on";
@@ -116,7 +116,7 @@ export async function createManualBackupAction() {
 export async function restoreBackupAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Восстановление backup доступно только SUPER_ADMIN.");
+    throw new Error("Восстановление backup доступно только суперадминистратору.");
   }
 
   const fileName = String(formData.get("fileName") ?? "").trim();
@@ -138,7 +138,7 @@ export async function restoreBackupAction(formData: FormData) {
 export async function restoreBackupFromComputerAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Восстановление backup доступно только SUPER_ADMIN.");
+    throw new Error("Восстановление backup доступно только суперадминистратору.");
   }
 
   const file = formData.get("backupFile");
@@ -175,14 +175,14 @@ function parseRole(value: FormDataEntryValue | null) {
 
 function assertRoleManagePermissions(currentRole: Role, targetRole: Role) {
   if (currentRole === Role.ADMIN && targetRole === Role.SUPER_ADMIN) {
-    throw new Error("Администратор не может назначать роль SUPER_ADMIN.");
+    throw new Error("Администратор не может назначать роль суперадминистратора.");
   }
 }
 
 export async function createUserAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Создание пользователя доступно только SUPER_ADMIN.");
+    throw new Error("Создание пользователя доступно только суперадминистратору.");
   }
 
   const name = String(formData.get("name") ?? "").trim();
@@ -219,7 +219,7 @@ export async function createUserAction(formData: FormData) {
 export async function updateUserAccessAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Изменение пользователей доступно только SUPER_ADMIN.");
+    throw new Error("Изменение пользователей доступно только суперадминистратору.");
   }
 
   const userId = String(formData.get("userId") ?? "");
@@ -276,7 +276,7 @@ export async function updateUserAccessAction(formData: FormData) {
 export async function updateAutoLogoutTimerAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
-    throw new Error("Изменение таймера автовыхода доступно только SUPER_ADMIN.");
+    throw new Error("Изменение таймера автовыхода доступно только суперадминистратору.");
   }
 
   const minutesRaw = String(formData.get("autoLogoutMinutes") ?? "").trim();
