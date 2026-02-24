@@ -300,6 +300,9 @@ export async function addContainerItemAction(formData: FormData) {
     if (container.status === ContainerStatus.CLOSED) {
       throw new Error("Нельзя добавлять товары в закрытый контейнер.");
     }
+    if (container.status === ContainerStatus.IN_TRANSIT) {
+      throw new Error("Нельзя изменять товары контейнера со статусом «В пути».");
+    }
 
     const existing = await tx.containerItem.findUnique({
       where: { containerId_productId: { containerId, productId } },

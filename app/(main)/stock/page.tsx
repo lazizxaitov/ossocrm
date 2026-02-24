@@ -227,13 +227,19 @@ export default async function StockPage({ searchParams }: StockPageProps) {
                     totalSaleUSD={totalSale}
                   />
                   {canManageStockItems ? (
-                    <EditStockItemModal
-                      itemId={row.id}
-                      productName={row.product.name}
-                      sku={row.product.sku}
-                      quantity={row.quantity}
-                      salePriceUSD={row.salePriceUSD}
-                    />
+                    row.container.status === "IN_TRANSIT" ? (
+                      <span className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-400">
+                        В пути
+                      </span>
+                    ) : (
+                      <EditStockItemModal
+                        itemId={row.id}
+                        productName={row.product.name}
+                        sku={row.product.sku}
+                        quantity={row.quantity}
+                        salePriceUSD={row.salePriceUSD}
+                      />
+                    )
                   ) : null}
                 </div>
               </article>
@@ -296,13 +302,19 @@ export default async function StockPage({ searchParams }: StockPageProps) {
                     </td>
                     {canManageStockItems ? (
                       <td className="px-3 py-2 text-slate-700">
-                        <EditStockItemModal
-                          itemId={row.id}
-                          productName={row.product.name}
-                          sku={row.product.sku}
-                          quantity={row.quantity}
-                          salePriceUSD={row.salePriceUSD}
-                        />
+                        {row.container.status === "IN_TRANSIT" ? (
+                          <span className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-slate-400">
+                            В пути
+                          </span>
+                        ) : (
+                          <EditStockItemModal
+                            itemId={row.id}
+                            productName={row.product.name}
+                            sku={row.product.sku}
+                            quantity={row.quantity}
+                            salePriceUSD={row.salePriceUSD}
+                          />
+                        )}
                       </td>
                     ) : null}
                   </tr>

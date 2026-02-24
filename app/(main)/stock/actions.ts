@@ -249,10 +249,13 @@ export async function updateStockItemAction(
 
   const existing = await prisma.containerItem.findUnique({
     where: { id },
-    select: { id: true, containerId: true },
+    select: { id: true, containerId: true, container: { select: { status: true } } },
   });
   if (!existing) {
     return { error: "Позиция не найдена.", success: null };
+  }
+  if (existing.container.status === "IN_TRANSIT") {
+    return { error: "Для товаров в пути изменение количества и цены запрещено.", success: null };
   }
 
   await prisma.containerItem.update({
@@ -288,10 +291,13 @@ export async function deleteStockItemAction(
 
   const existing = await prisma.containerItem.findUnique({
     where: { id },
-    select: { id: true, containerId: true },
+    select: { id: true, containerId: true, container: { select: { status: true } } },
   });
   if (!existing) {
     return { error: "Позиция не найдена.", success: null };
+  }
+  if (existing.container.status === "IN_TRANSIT") {
+    return { error: "Для товаров в пути изменение количества и цены запрещено.", success: null };
   }
 
   const [saleLinks, inventoryLinks] = await Promise.all([

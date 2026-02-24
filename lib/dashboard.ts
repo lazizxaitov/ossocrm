@@ -38,7 +38,10 @@ export async function computeKpis(params: { from: Date; to: Date; containerId?: 
   const saleItems = await prisma.saleItem.findMany({
     where: {
       sale: { createdAt: { gte: from, lte: to } },
-      containerItem: containerId ? { containerId } : undefined,
+      containerItem: {
+        ...(containerId ? { containerId } : {}),
+        container: { status: "ARRIVED" },
+      },
     },
     select: {
       quantity: true,
@@ -51,6 +54,7 @@ export async function computeKpis(params: { from: Date; to: Date; containerId?: 
   const expenses = await prisma.containerExpense.findMany({
     where: {
       createdAt: { lte: to },
+      container: { status: "ARRIVED" },
       containerId: containerId ?? undefined,
     },
     select: {
@@ -97,7 +101,7 @@ export async function computeKpis(params: { from: Date; to: Date; containerId?: 
 
   const investments = await prisma.containerInvestment.findMany({
     where: containerId ? { containerId } : undefined,
-    include: { container: { select: { netProfitUSD: true } } },
+    include: { container: { select: { id: true, status: true } } },
   });
 
   const payouts = await prisma.investorPayout.groupBy({
@@ -111,9 +115,63 @@ export async function computeKpis(params: { from: Date; to: Date; containerId?: 
     paidMap.set(`${row.containerId}:${row.investorId}`, row._sum.amountUSD ?? 0);
   }
 
+  const arrivedContainerIds = [
+    ...new Set(
+      investments
+        .filter((row) => row.container.status === "ARRIVED")
+        .map((row) => row.containerId),
+    ),
+  ];
+
+  const [allSaleItems, allExpenses] = await Promise.all([
+    arrivedContainerIds.length
+      ? prisma.saleItem.findMany({
+          where: { containerItem: { containerId: { in: arrivedContainerIds } } },
+          select: {
+            containerItem: { select: { containerId: true } },
+            quantity: true,
+            salePricePerUnitUSD: true,
+            costPerUnitUSD: true,
+            returnItems: { select: { quantity: true } },
+          },
+        })
+      : Promise.resolve([]),
+    arrivedContainerIds.length
+      ? prisma.containerExpense.findMany({
+          where: { containerId: { in: arrivedContainerIds } },
+          select: {
+            containerId: true,
+            amountUSD: true,
+            corrections: { select: { correctionAmountUSD: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const salesProfitByContainer = new Map<string, number>();
+  for (const row of allSaleItems) {
+    const returned = row.returnItems.reduce((sum, item) => sum + item.quantity, 0);
+    const effectiveQty = Math.max(0, row.quantity - returned);
+    const profit = effectiveQty * (row.salePricePerUnitUSD - row.costPerUnitUSD);
+    salesProfitByContainer.set(
+      row.containerItem.containerId,
+      (salesProfitByContainer.get(row.containerItem.containerId) ?? 0) + profit,
+    );
+  }
+
+  const expenseByContainer = new Map<string, number>();
+  for (const row of allExpenses) {
+    const corr = row.corrections.reduce((sum, c) => sum + c.correctionAmountUSD, 0);
+    expenseByContainer.set(row.containerId, (expenseByContainer.get(row.containerId) ?? 0) + row.amountUSD + corr);
+  }
+
   let availableToPayout = 0;
   for (const inv of investments) {
-    const shareProfit = (inv.container.netProfitUSD * inv.percentageShare) / 100;
+    if (inv.container.status !== "ARRIVED") continue;
+    const salesProfit = salesProfitByContainer.get(inv.containerId) ?? 0;
+    const expensesTotal = expenseByContainer.get(inv.containerId) ?? 0;
+    const netProfit = salesProfit - expensesTotal;
+    const shareProfit = (netProfit * inv.percentageShare) / 100;
     const paid = paidMap.get(`${inv.containerId}:${inv.investorId}`) ?? 0;
     availableToPayout += shareProfit - paid;
   }
@@ -141,6 +199,7 @@ export async function buildContainerRows(from: Date, to: Date) {
   return containers.map((container) => {
     const invested = container.investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
     let sold = 0;
+    let soldCost = 0;
     let soldQty = 0;
     let currentQty = 0;
 
@@ -151,15 +210,18 @@ export async function buildContainerRows(from: Date, to: Date) {
         const effectiveQty = Math.max(0, saleItem.quantity - returned);
         soldQty += effectiveQty;
         sold += effectiveQty * saleItem.salePricePerUnitUSD;
+        soldCost += effectiveQty * saleItem.costPerUnitUSD;
       }
     }
 
     const totalQty = soldQty + currentQty;
     const soldPercent = totalQty > 0 ? (soldQty / totalQty) * 100 : 0;
-    const expenses = container.expenses.reduce((sum, row) => {
+    const expensesRaw = container.expenses.reduce((sum, row) => {
       const corr = row.corrections.reduce((inner, c) => inner + c.correctionAmountUSD, 0);
       return sum + row.amountUSD + corr;
     }, 0);
+    const expenses = container.status === "ARRIVED" ? expensesRaw : 0;
+    const profit = sold - soldCost - expenses;
 
     let status = "OPEN";
     if (container.status === "CLOSED") status = "CLOSED";
@@ -172,7 +234,7 @@ export async function buildContainerRows(from: Date, to: Date) {
       invested,
       sold,
       expenses,
-      profit: container.netProfitUSD,
+      profit,
       status,
       soldPercent,
     };
@@ -245,14 +307,56 @@ export async function buildSystemAlerts() {
     alerts.push({ level: "warning", text: "Есть контейнеры, проданные более чем на 90%." });
   }
 
-  const investors = await prisma.containerInvestment.findMany({ include: { container: true } });
+  const investors = await prisma.containerInvestment.findMany({
+    include: { container: { select: { id: true, status: true } } },
+  });
+  const arrivedContainerIds = [...new Set(investors.filter((row) => row.container.status === "ARRIVED").map((row) => row.containerId))];
+  const [saleItems, expenses] = await Promise.all([
+    arrivedContainerIds.length
+      ? prisma.saleItem.findMany({
+          where: { containerItem: { containerId: { in: arrivedContainerIds } } },
+          select: {
+            containerItem: { select: { containerId: true } },
+            quantity: true,
+            salePricePerUnitUSD: true,
+            costPerUnitUSD: true,
+            returnItems: { select: { quantity: true } },
+          },
+        })
+      : Promise.resolve([]),
+    arrivedContainerIds.length
+      ? prisma.containerExpense.findMany({
+          where: { containerId: { in: arrivedContainerIds } },
+          select: { containerId: true, amountUSD: true, corrections: { select: { correctionAmountUSD: true } } },
+        })
+      : Promise.resolve([]),
+  ]);
+  const salesProfitByContainer = new Map<string, number>();
+  for (const row of saleItems) {
+    const returned = row.returnItems.reduce((sum, item) => sum + item.quantity, 0);
+    const effectiveQty = Math.max(0, row.quantity - returned);
+    const profit = effectiveQty * (row.salePricePerUnitUSD - row.costPerUnitUSD);
+    salesProfitByContainer.set(
+      row.containerItem.containerId,
+      (salesProfitByContainer.get(row.containerItem.containerId) ?? 0) + profit,
+    );
+  }
+  const expenseByContainer = new Map<string, number>();
+  for (const row of expenses) {
+    const corr = row.corrections.reduce((sum, c) => sum + c.correctionAmountUSD, 0);
+    expenseByContainer.set(row.containerId, (expenseByContainer.get(row.containerId) ?? 0) + row.amountUSD + corr);
+  }
   const payouts = await prisma.investorPayout.groupBy({ by: ["containerId", "investorId"], _sum: { amountUSD: true } });
   const paidMap = new Map<string, number>();
   for (const row of payouts) paidMap.set(`${row.containerId}:${row.investorId}`, row._sum.amountUSD ?? 0);
 
   if (
     investors.some((row) => {
-      const total = (row.container.netProfitUSD * row.percentageShare) / 100;
+      if (row.container.status !== "ARRIVED") return false;
+      const salesProfit = salesProfitByContainer.get(row.containerId) ?? 0;
+      const expensesTotal = expenseByContainer.get(row.containerId) ?? 0;
+      const netProfit = salesProfit - expensesTotal;
+      const total = (netProfit * row.percentageShare) / 100;
       if (total <= 0) return false;
       const paid = paidMap.get(`${row.containerId}:${row.investorId}`) ?? 0;
       const progress = paid / total;
