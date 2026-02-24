@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createOperatingExpenseAction } from "@/app/(main)/expenses/actions";
 import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
+import { CustomDateInput } from "@/components/custom-date-input";
 import { CustomSelect } from "@/components/custom-select";
 
 type InvestorOption = {
@@ -20,10 +21,20 @@ function nowLocalDateTimeValue() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function nowDateIso() {
+  return nowLocalDateTimeValue().slice(0, 10);
+}
+
+function nowTimeHm() {
+  return nowLocalDateTimeValue().slice(11, 16);
+}
+
 export function CreateOperatingExpenseModal({ investors }: CreateOperatingExpenseModalProps) {
   const [open, setOpen] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [investorId, setInvestorId] = useState("");
+  const [spentDate, setSpentDate] = useState(nowDateIso());
+  const [spentTime, setSpentTime] = useState(nowTimeHm());
 
   function requestClose() {
     setConfirmCloseOpen(true);
@@ -55,13 +66,23 @@ export function CreateOperatingExpenseModal({ investors }: CreateOperatingExpens
               />
 
               <label className="text-xs text-slate-600">Дата и время</label>
-              <input
-                name="spentAt"
-                type="datetime-local"
-                defaultValue={nowLocalDateTimeValue()}
-                required
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-              />
+              <div className="grid gap-2 md:grid-cols-2">
+                <CustomDateInput
+                  name="spentDate"
+                  value={spentDate}
+                  onValueChange={setSpentDate}
+                  required
+                  placeholder="Дата расхода"
+                />
+                <input
+                  name="spentTime"
+                  type="time"
+                  value={spentTime}
+                  onChange={(event) => setSpentTime(event.target.value)}
+                  required
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                />
+              </div>
 
               <label className="text-xs text-slate-600">Сумма (USD)</label>
               <input
@@ -114,6 +135,9 @@ export function CreateOperatingExpenseModal({ investors }: CreateOperatingExpens
         onConfirm={() => {
           setConfirmCloseOpen(false);
           setOpen(false);
+          setSpentDate(nowDateIso());
+          setSpentTime(nowTimeHm());
+          setInvestorId("");
         }}
       />
     </>

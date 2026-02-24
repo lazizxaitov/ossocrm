@@ -29,15 +29,16 @@ export async function createOperatingExpenseAction(formData: FormData) {
 
     const title = String(formData.get("title") ?? "").trim();
     const amountRaw = Number(String(formData.get("amountUSD") ?? "").replace(",", "."));
-    const spentAtRaw = String(formData.get("spentAt") ?? "").trim();
+    const spentDateRaw = String(formData.get("spentDate") ?? "").trim();
+    const spentTimeRaw = String(formData.get("spentTime") ?? "").trim();
     const investorId = String(formData.get("investorId") ?? "").trim();
 
     if (!title) throw new Error("Укажите название расхода.");
     if (!Number.isFinite(amountRaw) || amountRaw <= 0) throw new Error("Сумма расхода должна быть больше 0.");
-    if (!spentAtRaw) throw new Error("Укажите дату и время расхода.");
+    if (!spentDateRaw || !spentTimeRaw) throw new Error("Укажите дату и время расхода.");
     if (!investorId) throw new Error("Выберите инвестора, с кого списывается расход.");
 
-    const spentAt = new Date(spentAtRaw);
+    const spentAt = new Date(`${spentDateRaw}T${spentTimeRaw}:00`);
     if (Number.isNaN(spentAt.getTime())) throw new Error("Некорректная дата и время расхода.");
 
     const [investor, period] = await Promise.all([
