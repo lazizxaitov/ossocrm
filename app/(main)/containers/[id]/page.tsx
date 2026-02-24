@@ -54,7 +54,17 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
       where: { id },
       include: {
         items: {
-          include: { product: true },
+          include: {
+            product: true,
+            saleItems: {
+              select: {
+                quantity: true,
+                salePricePerUnitUSD: true,
+                costPerUnitUSD: true,
+                returnItems: { select: { quantity: true } },
+              },
+            },
+          },
           orderBy: { createdAt: "asc" },
         },
         investments: {
@@ -85,6 +95,19 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
   }
 
   const totalQuantity = container.items.reduce((sum, item) => sum + item.quantity, 0);
+  const plannedProfitUSD = container.items.reduce(
+    (sum, item) => sum + (item.salePriceUSD ?? item.product.basePriceUSD) * item.quantity,
+    0,
+  );
+  const realizedSalesProfitUSD = container.items.reduce((sum, item) => {
+    const rowProfit = item.saleItems.reduce((inner, saleItem) => {
+      const returnedQty = saleItem.returnItems.reduce((retSum, ret) => retSum + ret.quantity, 0);
+      const effectiveQty = Math.max(0, saleItem.quantity - returnedQty);
+      return inner + effectiveQty * (saleItem.salePricePerUnitUSD - saleItem.costPerUnitUSD);
+    }, 0);
+    return sum + rowProfit;
+  }, 0);
+  const factualProfitUSD = container.status === "IN_TRANSIT" ? 0 : realizedSalesProfitUSD;
   const investedTotal = container.investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
   const expected = container.totalPurchaseUSD + container.totalExpensesUSD;
   const mismatch = Math.abs(investedTotal - expected) >= 0.01;
@@ -136,7 +159,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
         <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-6">
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
           <p className="text-xs text-slate-500">Закупка CNY</p>
           <p className="mt-2 text-xl font-semibold text-slate-900">{container.totalPurchaseCNY.toFixed(2)}</p>
@@ -159,8 +182,14 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
         ) : null}
         {showFinance ? (
           <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <p className="text-xs text-slate-500">Прибыль контейнера</p>
-            <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(container.netProfitUSD)}</p>
+            <p className="text-xs text-slate-500">Планируемая прибыль (сумма продаж)</p>
+            <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(plannedProfitUSD)}</p>
+          </article>
+        ) : null}
+        {showFinance ? (
+          <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
+            <p className="text-xs text-slate-500">Реальная прибыль (в продажах)</p>
+            <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(factualProfitUSD)}</p>
           </article>
         ) : null}
       </div>
@@ -186,6 +215,12 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               <h3 className="text-base font-semibold text-slate-900">Инвесторы контейнера</h3>
               <p className="text-sm text-slate-600">
                 Вложено: {formatUsd(investedTotal)} | Ожидаемо: {formatUsd(expected)}
+              </p>
+              <p className="text-sm text-slate-600">
+                План по контейнеру: {formatUsd(plannedProfitUSD)} | Факт продаж: {formatUsd(factualProfitUSD)}
+              </p>
+              <p className="text-sm text-slate-600">
+                Чистая прибыль (с учётом расходов): {formatUsd(container.netProfitUSD)}
               </p>
               {mismatch ? <p className="text-sm font-medium text-orange-700">Есть расхождение сумм инвестиций.</p> : null}
             </div>
@@ -219,22 +254,26 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                   <th className="px-3 py-2 font-medium">Инвестор</th>
                   <th className="px-3 py-2 font-medium">Вложил</th>
                   <th className="px-3 py-2 font-medium">%</th>
-                  <th className="px-3 py-2 font-medium">Прибыль</th>
+                  <th className="px-3 py-2 font-medium">План прибыль</th>
+                  <th className="px-3 py-2 font-medium">Факт прибыль</th>
                   <th className="px-3 py-2 font-medium">Выплачено</th>
-                  <th className="px-3 py-2 font-medium">Остаток</th>
+                  <th className="px-3 py-2 font-medium">Остаток к выплате</th>
                 </tr>
               </thead>
               <tbody>
                 {container.investments.map((row) => {
-                  const profit = computeInvestorProfit(container.netProfitUSD, row.percentageShare);
+                  const plannedProfit = computeInvestorProfit(plannedProfitUSD, row.percentageShare);
+                  const actualProfit = computeInvestorProfit(factualProfitUSD, row.percentageShare);
                   const paid = paidByInvestor.get(row.investorId) ?? 0;
-                  const remaining = profit - paid;
+                  const shareAmountUSD = computeInvestorProfit(expected, row.percentageShare);
+                  const remaining = Math.max(0, shareAmountUSD - paid);
                   return (
                     <tr key={row.id} className="border-t border-[var(--border)]">
                       <td className="px-3 py-2 text-slate-800">{row.investor.name}</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(row.investedAmountUSD)}</td>
                       <td className="px-3 py-2 text-slate-700">{row.percentageShare.toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-slate-700">{formatUsd(profit)}</td>
+                      <td className="px-3 py-2 text-slate-700">{formatUsd(plannedProfit)}</td>
+                      <td className="px-3 py-2 text-slate-700">{formatUsd(actualProfit)}</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(paid)}</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(remaining)}</td>
                     </tr>
@@ -242,7 +281,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                 })}
                 {!container.investments.length ? (
                   <tr>
-                    <td className="px-3 py-4 text-center text-slate-500" colSpan={6}>
+                    <td className="px-3 py-4 text-center text-slate-500" colSpan={7}>
                       Инвесторы не добавлены.
                     </td>
                   </tr>

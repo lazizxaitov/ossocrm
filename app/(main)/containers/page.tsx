@@ -23,7 +23,23 @@ export default async function ContainersPage() {
       include: {
         _count: { select: { items: true, investments: true } },
         investments: { select: { investedAmountUSD: true } },
-        items: { select: { totalCbm: true, cbm: true, quantity: true } },
+        items: {
+          select: {
+            totalCbm: true,
+            cbm: true,
+            quantity: true,
+            salePriceUSD: true,
+            product: { select: { basePriceUSD: true } },
+            saleItems: {
+              select: {
+                quantity: true,
+                salePricePerUnitUSD: true,
+                costPerUnitUSD: true,
+                returnItems: { select: { quantity: true } },
+              },
+            },
+          },
+        },
       },
     }),
     prisma.currencySetting.findFirst({ orderBy: { updatedAt: "desc" } }),
@@ -87,7 +103,8 @@ export default async function ContainersPage() {
               <th className="px-3 py-2 font-medium">Статус</th>
               {showFinance ? <th className="px-3 py-2 font-medium">Закупка USD</th> : null}
               {showFinance ? <th className="px-3 py-2 font-medium">Расходы USD</th> : null}
-              {showFinance ? <th className="px-3 py-2 font-medium">Прибыль</th> : null}
+              {showFinance ? <th className="px-3 py-2 font-medium">План</th> : null}
+              {showFinance ? <th className="px-3 py-2 font-medium">Факт</th> : null}
               <th className="px-3 py-2 font-medium">Инвестиции</th>
               <th className="px-3 py-2 font-medium">Дата</th>
               <th className="px-3 py-2 font-medium">Товары</th>
@@ -98,6 +115,19 @@ export default async function ContainersPage() {
           <tbody>
             {containers.map((container) => {
               const investedTotal = container.investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
+              const plannedProfitUSD = container.items.reduce(
+                (sum, item) => sum + (item.salePriceUSD ?? item.product.basePriceUSD) * item.quantity,
+                0,
+              );
+              const realizedSalesProfitUSD = container.items.reduce((sum, item) => {
+                const itemProfit = item.saleItems.reduce((inner, saleItem) => {
+                  const returnedQty = saleItem.returnItems.reduce((retSum, ret) => retSum + ret.quantity, 0);
+                  const effectiveQty = Math.max(0, saleItem.quantity - returnedQty);
+                  return inner + effectiveQty * (saleItem.salePricePerUnitUSD - saleItem.costPerUnitUSD);
+                }, 0);
+                return sum + itemProfit;
+              }, 0);
+              const factualProfitUSD = container.status === "IN_TRANSIT" ? 0 : realizedSalesProfitUSD;
               const totalCbm = container.items.reduce((sum, item) => {
                 if (item.totalCbm && item.totalCbm > 0) return sum + item.totalCbm;
                 if (item.cbm && item.cbm > 0 && item.quantity > 0) return sum + item.cbm * item.quantity;
@@ -112,7 +142,8 @@ export default async function ContainersPage() {
                   <td className="px-3 py-2 text-slate-700">{ruStatus(container.status)}</td>
                   {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(container.totalPurchaseUSD)}</td> : null}
                   {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(container.totalExpensesUSD)}</td> : null}
-                  {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(container.netProfitUSD)}</td> : null}
+                  {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(plannedProfitUSD)}</td> : null}
+                  {showFinance ? <td className="px-3 py-2 text-slate-700">{formatUsd(factualProfitUSD)}</td> : null}
                   <td className="px-3 py-2 text-slate-700">
                     {showFinance ? formatUsd(investedTotal) : `${container._count.investments} инвест.`}
                     {mismatch && showFinance ? (
@@ -145,7 +176,7 @@ export default async function ContainersPage() {
             })}
             {!containers.length ? (
               <tr>
-                <td className="px-3 py-6 text-center text-slate-500" colSpan={showFinance ? 10 : 7}>
+                <td className="px-3 py-6 text-center text-slate-500" colSpan={showFinance ? 11 : 7}>
                   Контейнеры пока не созданы.
                 </td>
               </tr>
