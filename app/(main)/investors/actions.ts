@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getRequiredSession } from "@/lib/auth";
 import { toNumber } from "@/lib/currency";
 import { assertOpenPeriodForDate } from "@/lib/financial-period";
-import { computeInvestorProfit, recalculateContainerInvestmentShares } from "@/lib/investor";
+import { recalculateContainerInvestmentShares } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { INVESTORS_MANAGE_ROLES } from "@/lib/rbac";
 
@@ -98,49 +99,64 @@ export async function createInvestorPayoutAction(formData: FormData) {
   const amountUSD = toNumber(formData.get("amountUSD"));
   const payoutDateRaw = String(formData.get("payoutDate") ?? "").trim();
 
-  if (!investorId || !containerId || !Number.isFinite(amountUSD) || amountUSD <= 0) {
-    throw new Error("Проверьте данные выплаты.");
+  if (!containerId) {
+    throw new Error("Не указан контейнер.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    const period = await assertOpenPeriodForDate(new Date());
-    const [container, investment] = await Promise.all([
-      tx.container.findUnique({ where: { id: containerId } }),
-      tx.containerInvestment.findUnique({
-        where: { containerId_investorId: { containerId, investorId } },
-      }),
-    ]);
-
-    if (!container || !investment) {
-      throw new Error("Инвестор не привязан к контейнеру.");
+  try {
+    if (!investorId || !Number.isFinite(amountUSD) || amountUSD <= 0) {
+      throw new Error("Проверьте данные выплаты.");
     }
 
-    const paid = (await tx.investorPayout.aggregate({
-      where: { containerId, investorId },
-      _sum: { amountUSD: true },
-    }))._sum.amountUSD ?? 0;
+    await prisma.$transaction(async (tx) => {
+      const period = await assertOpenPeriodForDate(new Date());
+      const [container, investment] = await Promise.all([
+        tx.container.findUnique({ where: { id: containerId } }),
+        tx.containerInvestment.findUnique({
+          where: { containerId_investorId: { containerId, investorId } },
+        }),
+      ]);
 
-    const profitTotal = computeInvestorProfit(container.netProfitUSD, investment.percentageShare);
-    const available = profitTotal - paid;
+      if (!container || !investment) {
+        throw new Error("Инвестор не привязан к контейнеру.");
+      }
 
-    if (amountUSD > available + 0.0001) {
-      throw new Error("Сумма выплаты превышает доступную прибыль.");
-    }
+      const paid = (
+        await tx.investorPayout.aggregate({
+          where: { containerId, investorId },
+          _sum: { amountUSD: true },
+        })
+      )._sum.amountUSD ?? 0;
 
-    await tx.investorPayout.create({
-      data: {
-        investorId,
-        containerId,
-        amountUSD,
-        payoutDate: payoutDateRaw ? new Date(payoutDateRaw) : new Date(),
-        financialPeriodId: period.id,
-        createdById: session.userId,
-      },
+      // Выплата доступна по доле инвестора в контейнере,
+      // даже если контейнер еще не в прибыли.
+      const containerPoolUSD = container.totalPurchaseUSD + container.totalExpensesUSD;
+      const shareAmountUSD = (containerPoolUSD * investment.percentageShare) / 100;
+      const available = Math.max(0, shareAmountUSD - paid);
+
+      if (amountUSD > available + 0.0001) {
+        throw new Error("Сумма выплаты превышает доступную сумму по доле инвестора.");
+      }
+
+      await tx.investorPayout.create({
+        data: {
+          investorId,
+          containerId,
+          amountUSD,
+          payoutDate: payoutDateRaw ? new Date(payoutDateRaw) : new Date(),
+          financialPeriodId: period.id,
+          createdById: session.userId,
+        },
+      });
     });
-  });
 
-  revalidatePath("/investors");
-  revalidatePath("/containers");
-  revalidatePath(`/containers/${containerId}`);
-  revalidatePath("/investor");
+    revalidatePath("/investors");
+    revalidatePath("/containers");
+    revalidatePath(`/containers/${containerId}`);
+    revalidatePath("/investor");
+    redirect(`/containers/${containerId}?success=${encodeURIComponent("Выплата инвестору проведена.")}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось провести выплату инвестору.";
+    redirect(`/containers/${containerId}?error=${encodeURIComponent(message)}`);
+  }
 }

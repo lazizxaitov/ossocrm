@@ -29,15 +29,19 @@ import {
 
 type ContainerDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; success?: string }>;
 };
 
-export default async function ContainerDetailPage({ params }: ContainerDetailPageProps) {
+export default async function ContainerDetailPage({ params, searchParams }: ContainerDetailPageProps) {
   const session = await getRequiredSession();
   if (!CONTAINERS_VIEW_ROLES.includes(session.role)) {
     redirect("/dashboard");
   }
 
   const { id } = await params;
+  const query = await searchParams;
+  const error = (query.error ?? "").trim();
+  const success = (query.success ?? "").trim();
   const canManage = CONTAINERS_MANAGE_ROLES.includes(session.role);
   const canManageInvestors = INVESTORS_MANAGE_ROLES.includes(session.role);
   const canAddExpense = EXPENSES_ADD_ROLES.includes(session.role);
@@ -125,6 +129,12 @@ export default async function ContainerDetailPage({ params }: ContainerDetailPag
           </div>
         </div>
       </article>
+      {error ? (
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+      ) : null}
+      {success ? (
+        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-5">
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
