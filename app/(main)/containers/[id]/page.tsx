@@ -266,6 +266,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                   <th className="px-3 py-2 font-medium">Вложил</th>
                   <th className="px-3 py-2 font-medium">%</th>
                   <th className="px-3 py-2 font-medium">План прибыль</th>
+                  <th className="px-3 py-2 font-medium">Расходы (доля)</th>
                   <th className="px-3 py-2 font-medium">Факт прибыль</th>
                   <th className="px-3 py-2 font-medium">Выплачено</th>
                   <th className="px-3 py-2 font-medium">Остаток к выплате</th>
@@ -274,7 +275,8 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               <tbody>
                 {containerInvestmentsSorted.map((row) => {
                   const plannedProfit = computeInvestorProfit(plannedProfitUSD, row.percentageShare);
-                  const actualProfit = computeInvestorProfit(factualProfitUSD, row.percentageShare);
+                  const expenseShare = computeInvestorProfit(container.totalExpensesUSD, row.percentageShare);
+                  const actualProfit = computeInvestorProfit(factualProfitUSD, row.percentageShare) - expenseShare;
                   const paid = paidByInvestor.get(row.investorId) ?? 0;
                   const shareAmountUSD = actualProfit;
                   const remaining = Math.max(0, shareAmountUSD - paid);
@@ -284,6 +286,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                       <td className="px-3 py-2 text-slate-700">{formatUsd(row.investedAmountUSD)}</td>
                       <td className="px-3 py-2 text-slate-700">{row.percentageShare.toFixed(2)}%</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(plannedProfit)}</td>
+                      <td className="px-3 py-2 text-slate-700">{formatUsd(expenseShare)}</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(actualProfit)}</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(paid)}</td>
                       <td className="px-3 py-2 text-slate-700">{formatUsd(remaining)}</td>
@@ -292,7 +295,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                 })}
                 {!container.investments.length ? (
                   <tr>
-                    <td className="px-3 py-4 text-center text-slate-500" colSpan={7}>
+                    <td className="px-3 py-4 text-center text-slate-500" colSpan={8}>
                       Инвесторы не добавлены.
                     </td>
                   </tr>

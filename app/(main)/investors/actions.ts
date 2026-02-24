@@ -139,6 +139,7 @@ export async function createInvestorPayoutAction(formData: FormData) {
         const effectiveQty = Math.max(0, item.quantity - returnedQty);
         return sum + effectiveQty * (item.salePricePerUnitUSD - item.costPerUnitUSD);
       }, 0);
+      const realizedNetProfitUSD = realizedSalesProfitUSD - container.totalExpensesUSD;
 
       const paid = (
         await tx.investorPayout.aggregate({
@@ -147,7 +148,7 @@ export async function createInvestorPayoutAction(formData: FormData) {
         })
       )._sum.amountUSD ?? 0;
 
-      const shareAmountUSD = computeInvestorProfit(realizedSalesProfitUSD, investment.percentageShare);
+      const shareAmountUSD = computeInvestorProfit(realizedNetProfitUSD, investment.percentageShare);
       const available = Math.max(0, shareAmountUSD - paid);
 
       if (amountUSD > available + 0.0001) {
