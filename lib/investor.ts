@@ -39,7 +39,7 @@ export async function recalculateContainerInvestmentShares(
   ]);
 
   if (!container) {
-    throw new Error("Контейнер не найден.");
+    throw new Error("РљРѕРЅС‚РµР№РЅРµСЂ РЅРµ РЅР°Р№РґРµРЅ.");
   }
 
   const total = investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
