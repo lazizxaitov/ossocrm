@@ -1,4 +1,4 @@
-п»ї"use client";
+"use client";
 
 import Image from "next/image";
 import { useActionState, useMemo, useState } from "react";
@@ -29,6 +29,7 @@ type InvestorRow = {
   key: number;
   investorId: string;
   investedAmountUSD: string;
+  percentageShare: string;
 };
 
 type ItemRow = {
@@ -76,7 +77,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   const [search, setSearch] = useState("");
 
   const [investorNextKey, setInvestorNextKey] = useState(2);
-  const [investorRows, setInvestorRows] = useState<InvestorRow[]>([{ key: 1, investorId: "", investedAmountUSD: "" }]);
+  const [investorRows, setInvestorRows] = useState<InvestorRow[]>([{ key: 1, investorId: "", investedAmountUSD: "", percentageShare: "" }]);
 
   const [itemNextKey, setItemNextKey] = useState(2);
   const [editingPriceForKey, setEditingPriceForKey] = useState<number | null>(null);
@@ -86,25 +87,21 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
 
   const [purchaseCny, setPurchaseCny] = useState("");
   const [rate, setRate] = useState(defaultRate ? String(defaultRate) : "");
-  const [initialExpensesUSD, setInitialExpensesUSD] = useState("");
   const [arrivalDate, setArrivalDate] = useState("");
-
   const purchaseCnyNumber = Number(purchaseCny || 0);
   const rateNumber = Number(rate || 0);
-  const initialExpensesNumber = Number(initialExpensesUSD || 0);
   const purchaseUsdFromCurrency = purchaseCnyNumber * rateNumber;
-
   const investmentsPayload = useMemo(
     () =>
       investorRows
         .map((row) => ({
           investorId: row.investorId,
           investedAmountUSD: Number(row.investedAmountUSD || 0),
+          percentageShare: Number(row.percentageShare || 0),
         }))
         .filter((row) => row.investorId && row.investedAmountUSD > 0),
     [investorRows],
   );
-
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
 
   const containerItemsPayload = useMemo(
@@ -153,7 +150,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
     [containerItemsPayload],
   );
   const totalPurchaseUsd = Math.max(purchaseUsdFromCurrency, itemsPurchaseUsd);
-  const expectedInvestmentsUsd = totalPurchaseUsd + Math.max(0, initialExpensesNumber);
+  const expectedInvestmentsUsd = totalPurchaseUsd;
   const diff = investedTotal - expectedInvestmentsUsd;
   const hasMismatch = Math.abs(diff) >= 0.01;
   const editingDetailsRow = editingDetailsForKey === null ? null : itemRows.find((row) => row.key === editingDetailsForKey) ?? null;
@@ -168,7 +165,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
       return hay.includes(normalizedSearch);
     });
     for (const product of filtered) {
-      const key = product.categoryName || "Р‘РµР· РєР°С‚РµРіРѕСЂРёРё";
+      const key = product.categoryName || "Без категории";
       const list = map.get(key) ?? [];
       list.push(product);
       map.set(key, list);
@@ -181,7 +178,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   }
 
   function addInvestorRow() {
-    setInvestorRows((prev) => [...prev, { key: investorNextKey, investorId: "", investedAmountUSD: "" }]);
+    setInvestorRows((prev) => [...prev, { key: investorNextKey, investorId: "", investedAmountUSD: "", percentageShare: "" }]);
     setInvestorNextKey((value) => value + 1);
   }
 
@@ -257,7 +254,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
         onClick={() => setOpen(true)}
         className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
       >
-        РЎРѕР·РґР°С‚СЊ РєРѕРЅС‚РµР№РЅРµСЂ
+        Создать контейнер
       </button>
 
       {open ? (
@@ -266,30 +263,30 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
             className="max-h-[95vh] w-full max-w-6xl overflow-auto rounded-2xl bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-900">РќРѕРІС‹Р№ РєРѕРЅС‚РµР№РЅРµСЂ</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Новый контейнер</h3>
             <p className="text-sm text-slate-600">
-              Р—Р°РїРѕР»РЅРёС‚Рµ Р·Р°РєСѓРїРєСѓ, С‚РѕРІР°СЂС‹, РёРЅРІРµСЃС‚РѕСЂРѕРІ Рё СЃС‚Р°СЂС‚РѕРІС‹Рµ СЂР°СЃС…РѕРґС‹.
+              Заполните закупку, товары и инвесторов.
             </p>
 
             <form action={formAction} className="mt-4 grid gap-3">
-              <div className="grid gap-2 md:grid-cols-6">
+              <div className="grid gap-2 md:grid-cols-5">
                 <input
                   name="name"
                   required
-                  placeholder="РљРѕРЅС‚РµР№РЅРµСЂ С„РµРІСЂР°Р»СЊ 2026"
+                  placeholder="Контейнер февраль 2026"
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                 />
                 <CustomDateInput
                   name="purchaseDate"
                   required
                   defaultValue={todayIso}
-                  placeholder="Р”Р°С‚Р° Р·Р°РєР°Р·Р°/Р·Р°РєСѓРїРєРё"
+                  placeholder="Дата заказа/закупки"
                 />
                 <CustomDateInput
                   name="arrivalDate"
                   value={arrivalDate}
                   onValueChange={setArrivalDate}
-                  placeholder="РџСЂРёРјРµСЂРЅР°СЏ РґР°С‚Р° РїСЂРёР±С‹С‚РёСЏ"
+                  placeholder="Примерная дата прибытия"
                 />
                 <input
                   name="totalPurchaseCNY"
@@ -299,7 +296,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   required
                   value={purchaseCny}
                   onChange={(event) => setPurchaseCny(event.target.value)}
-                  placeholder="Р—Р°РєСѓРїРєР° CNY"
+                  placeholder="Закупка CNY"
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                 />
                 <input
@@ -309,49 +306,39 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   step="0.0001"
                   value={rate}
                   onChange={(event) => setRate(event.target.value)}
-                  placeholder="РљСѓСЂСЃ CNYв†’USD"
-                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
-                />
-                <input
-                  name="initialExpensesUSD"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={initialExpensesUSD}
-                  onChange={(event) => setInitialExpensesUSD(event.target.value)}
-                  placeholder="РЎС‚Р°СЂС‚РѕРІС‹Рµ СЂР°СЃС…РѕРґС‹ USD"
+                  placeholder="Курс CNY>USD"
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                 />
               </div>
               <p className="text-xs text-slate-500">
-                РљСѓСЂСЃ РјРѕР¶РЅРѕ РѕСЃС‚Р°РІРёС‚СЊ РїСѓСЃС‚С‹Рј: СЃРёСЃС‚РµРјР° РІРѕР·СЊРјРµС‚ Р°РєС‚СѓР°Р»СЊРЅС‹Р№ РєСѓСЂСЃ РёР· РЅР°СЃС‚СЂРѕРµРє РІР°Р»СЋС‚С‹.
+                Курс можно оставить пустым: система возьмет актуальный курс из настроек валюты.
               </p>
 
               <div className="rounded-xl border border-[var(--border)] p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-800">РўРѕРІР°СЂС‹ РєРѕРЅС‚РµР№РЅРµСЂР°</p>
+                  <p className="text-sm font-medium text-slate-800">Товары контейнера</p>
                   <button
                     type="button"
                     onClick={() => setItemsModalOpen(true)}
                     className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    Р”РѕР±Р°РІРёС‚СЊ С‚РѕРІР°СЂ
+                    Добавить товар
                   </button>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Р”РѕР±Р°РІР»РµРЅРѕ РїРѕР·РёС†РёР№: <span className="font-semibold text-slate-700">{itemRows.length}</span>
+                  Добавлено позиций: <span className="font-semibold text-slate-700">{itemRows.length}</span>
                 </p>
               </div>
 
               <div className="rounded-xl border border-[var(--border)] p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-800">РРЅРІРµСЃС‚РѕСЂС‹ РєРѕРЅС‚РµР№РЅРµСЂР°</p>
+                  <p className="text-sm font-medium text-slate-800">Инвесторы контейнера</p>
                   <button
                     type="button"
                     onClick={addInvestorRow}
                     className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    Р”РѕР±Р°РІРёС‚СЊ РёРЅРІРµСЃС‚РѕСЂР°
+                    Добавить инвестора
                   </button>
                 </div>
                 <div className="space-y-2">
@@ -360,8 +347,8 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                       <CustomSelect
                         value={row.investorId ?? ""}
                         onValueChange={(value) => updateInvestorRow(row.key, { investorId: value })}
-                        placeholder="Р’С‹Р±РµСЂРёС‚Рµ РёРЅРІРµСЃС‚РѕСЂР°"
-                        className="md:col-span-8"
+                        placeholder="Выберите инвестора"
+                        className="md:col-span-6"
                         options={investors.map((investor) => ({ value: investor.id, label: investor.name }))}
                       />
                       <input
@@ -370,8 +357,17 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                         step="0.01"
                         value={row.investedAmountUSD ?? ""}
                         onChange={(event) => updateInvestorRow(row.key, { investedAmountUSD: event.target.value })}
-                        placeholder="РЎСѓРјРјР° РІР»РѕР¶РµРЅРёСЏ USD"
+                        placeholder="Сумма вложения USD"
                         className="md:col-span-3 rounded border border-[var(--border)] px-2 py-2 text-sm"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={row.percentageShare ?? ""}
+                        onChange={(event) => updateInvestorRow(row.key, { percentageShare: event.target.value })}
+                        placeholder="Процент % (необязательно)"
+                        className="md:col-span-2 rounded border border-[var(--border)] px-2 py-2 text-sm"
                       />
                       <button
                         type="button"
@@ -389,18 +385,17 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
               <input type="hidden" name="containerItemsJson" value={JSON.stringify(containerItemsPayload)} />
 
               <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <p>Р—Р°РєСѓРїРєР° USD (РїРѕ РєСѓСЂСЃСѓ): ${purchaseUsdFromCurrency.toFixed(2)}</p>
-                <p>Р—Р°РєСѓРїРєР° USD (РїРѕ С‚РѕРІР°СЂР°Рј): ${itemsPurchaseUsd.toFixed(2)}</p>
-                <p>РС‚РѕРі Р·Р°РєСѓРїРєРё USD: ${totalPurchaseUsd.toFixed(2)}</p>
-                <p>РЎС‚Р°СЂС‚РѕРІС‹Рµ СЂР°СЃС…РѕРґС‹ USD: ${Math.max(0, initialExpensesNumber).toFixed(2)}</p>
-                <p>РћР¶РёРґР°РµРјРѕ Рє РёРЅРІРµСЃС‚РёС†РёСЏРј: ${expectedInvestmentsUsd.toFixed(2)}</p>
-                <p>Р’Р»РѕР¶РµРЅРѕ РёРЅРІРµСЃС‚РѕСЂР°РјРё: ${investedTotal.toFixed(2)}</p>
+                <p>Закупка USD (по курсу): ${purchaseUsdFromCurrency.toFixed(2)}</p>
+                <p>Закупка USD (по товарам): ${itemsPurchaseUsd.toFixed(2)}</p>
+                <p>Итог закупки USD: ${totalPurchaseUsd.toFixed(2)}</p>
+                <p>Ожидаемо к инвестициям: ${expectedInvestmentsUsd.toFixed(2)}</p>
+                <p>Вложено инвесторами: ${investedTotal.toFixed(2)}</p>
                 {hasMismatch ? (
                   <p className="font-semibold text-orange-700">
-                    Р’РЅРёРјР°РЅРёРµ: СЂР°Р·РЅРёС†Р° ${diff.toFixed(2)}. РЎСѓРјРјР° РёРЅРІРµСЃС‚РёС†РёР№ РЅРµ СЃРѕРІРїР°РґР°РµС‚ СЃ Р·Р°РєСѓРїРєРѕР№.
+                    Внимание: разница ${diff.toFixed(2)}. Сумма инвестиций не совпадает с закупкой.
                   </p>
                 ) : (
-                  <p className="font-semibold text-emerald-700">РЎСѓРјРјС‹ СЃРѕРІРїР°РґР°СЋС‚.</p>
+                  <p className="font-semibold text-emerald-700">Суммы совпадают.</p>
                 )}
               </div>
 
@@ -410,7 +405,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   disabled={isPending}
                   className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                 >
-                  {isPending ? "РЎРѕС…СЂР°РЅРµРЅРёРµ..." : "РЎРѕС…СЂР°РЅРёС‚СЊ РєРѕРЅС‚РµР№РЅРµСЂ"}
+                  {isPending ? "Сохранение..." : "Сохранить контейнер"}
                 </button>
                 <button
                   type="button"
@@ -418,7 +413,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   disabled={isPending}
                   className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  РћС‚РјРµРЅР°
+                  Отмена
                 </button>
               </div>
               {state.error ? (
@@ -428,7 +423,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
               ) : null}
               {state.success ? (
                 <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  РљРѕРЅС‚РµР№РЅРµСЂ СѓСЃРїРµС€РЅРѕ СЃРѕР·РґР°РЅ.
+                  Контейнер успешно создан.
                 </p>
               ) : null}
             </form>
@@ -437,10 +432,10 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
       ) : null}
       <CustomConfirmDialog
         open={confirmCloseOpen}
-        title="Р—Р°РєСЂС‹С‚СЊ СЃРѕР·РґР°РЅРёРµ РєРѕРЅС‚РµР№РЅРµСЂР°"
-        message="Р”Р°РЅРЅС‹Рµ С„РѕСЂРјС‹ Р±СѓРґСѓС‚ РїРѕС‚РµСЂСЏРЅС‹. Р—Р°РєСЂС‹С‚СЊ РѕРєРЅРѕ?"
-        confirmLabel="Р—Р°РєСЂС‹С‚СЊ"
-        cancelLabel="РћСЃС‚Р°С‚СЊСЃСЏ"
+        title="Закрыть создание контейнера"
+        message="Данные формы будут потеряны. Закрыть окно?"
+        confirmLabel="Закрыть"
+        cancelLabel="Остаться"
         danger
         onCancel={() => setConfirmCloseOpen(false)}
         onConfirm={() => {
@@ -455,13 +450,13 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
             className="flex h-full w-full flex-col bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h4 className="text-base font-semibold text-slate-900">Р”РѕР±Р°РІР»РµРЅРёРµ С‚РѕРІР°СЂРѕРІ РІ РєРѕРЅС‚РµР№РЅРµСЂ</h4>
+            <h4 className="text-base font-semibold text-slate-900">Добавление товаров в контейнер</h4>
             <div className="mt-3 grid min-h-0 flex-1 gap-3 lg:grid-cols-[380px_1fr]">
               <section className="flex min-h-0 flex-col rounded-xl border border-[var(--border)] p-3">
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="РџРѕРёСЃРє РїРѕ РєР°С‚РµРіРѕСЂРёРё / С‚РѕРІР°СЂСѓ / SKU"
+                  placeholder="Поиск по категории / товару / SKU"
                   className="mb-2 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
                 />
                 <div className="min-h-0 flex-1 space-y-2 overflow-auto">
@@ -492,7 +487,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                                 />
                               ) : (
                                 <div className="flex h-9 w-9 items-center justify-center rounded-md border border-dashed border-[var(--border)] text-[10px] text-slate-400">
-                                  РЅРµС‚
+                                  нет
                                 </div>
                               )}
                               <div className="min-w-0">
@@ -528,14 +523,14 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   isItemsDropActive ? "border-[var(--accent)] bg-slate-50" : "border-[var(--border)]"
                 }`}
               >
-                <p className="mb-2 text-sm font-medium text-slate-800">Р”РѕР±Р°РІР»РµРЅРЅС‹Рµ С‚РѕРІР°СЂС‹</p>
+                <p className="mb-2 text-sm font-medium text-slate-800">Добавленные товары</p>
                 <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
-                  <p>РўРѕРІР°СЂ</p>
-                  <p>Р Р°Р·РјРµСЂ</p>
-                  <p>РљРѕР»РёС‡РµСЃС‚РІРѕ (QTY)</p>
-                  <p>РўРѕРІР°СЂ</p>
-                  <p>Р¦РµРЅР°</p>
-                  <p>РЈРґР°Р»РёС‚СЊ</p>
+                  <p>Товар</p>
+                  <p>Размер</p>
+                  <p>Количество (QTY)</p>
+                  <p>Товар</p>
+                  <p>Цена</p>
+                  <p>Удалить</p>
                 </div>
                 <div className="min-h-0 flex-1 space-y-2 overflow-auto">
                   {itemRows.map((row) => {
@@ -544,13 +539,13 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                       <div key={row.key} className="rounded-lg border border-[var(--border)] bg-white p-2">
                         <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px]">
                           <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700">
-                            {productName || "вЂ”"}
+                            {productName || "—"}
                           </div>
                           <div
-                            title={row.sizeLabel || "Р‘РµР· СЂР°Р·РјРµСЂР°"}
+                            title={row.sizeLabel || "Без размера"}
                             className="truncate rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700"
                           >
-                            {row.sizeLabel || "Р‘РµР· СЂР°Р·РјРµСЂР°"}
+                            {row.sizeLabel || "Без размера"}
                           </div>
                           <div className="flex items-center">
                             <input
@@ -568,21 +563,21 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                             onClick={() => setEditingDetailsForKey(row.key)}
                             className="h-10 rounded border border-[var(--border)] px-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                           >
-                            РР·РјРµРЅРёС‚СЊ С‚РѕРІР°СЂ
+                            Изменить товар
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingPriceForKey(row.key)}
                             className="h-10 rounded border border-[var(--border)] px-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                           >
-                            РР·РјРµРЅРёС‚СЊ С†РµРЅСѓ
+                            Изменить цену
                           </button>
                           <button
                             type="button"
                             onClick={() => removeItemRow(row.key)}
                             className="h-10 rounded border border-rose-300 px-1.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
                           >
-                            РЈРґР°Р»РёС‚СЊ
+                            Удалить
                           </button>
                         </div>
                       </div>
@@ -590,8 +585,8 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                   })}
                   {!itemRows.length ? (
                     <div className="rounded-lg border border-dashed border-[var(--border)] bg-slate-50 px-4 py-6 text-center">
-                      <p className="text-sm font-medium text-slate-700">РџРµСЂРµС‚Р°С‰РёС‚Рµ С‚РѕРІР°СЂ СЃСЋРґР°</p>
-                      <p className="mt-1 text-xs text-slate-500">РёР»Рё РЅР°Р¶РјРёС‚Рµ РЅР° С‚РѕРІР°СЂ СЃР»РµРІР° РґР»СЏ РґРѕР±Р°РІР»РµРЅРёСЏ</p>
+                      <p className="text-sm font-medium text-slate-700">Перетащите товар сюда</p>
+                      <p className="mt-1 text-xs text-slate-500">или нажмите на товар слева для добавления</p>
                     </div>
                   ) : null}
                 </div>
@@ -605,10 +600,10 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                       className="w-full max-w-md rounded-xl border border-[var(--border)] bg-white p-4 shadow-xl"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      <p className="text-sm font-semibold text-slate-900">РР·РјРµРЅРёС‚СЊ С‚РѕРІР°СЂ</p>
+                      <p className="text-sm font-semibold text-slate-900">Изменить товар</p>
                       <div className="mt-3 grid gap-2">
                         <label className="grid gap-1 text-xs text-slate-600">
-                          Р Р°Р·РјРµСЂ
+                          Размер
                           <input
                             value={editingDetailsRow.sizeLabel ?? ""}
                             onChange={(event) => updateItemRow(editingDetailsRow.key, { sizeLabel: event.target.value })}
@@ -616,7 +611,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           />
                         </label>
                         <label className="grid gap-1 text-xs text-slate-600">
-                          Р¦РІРµС‚
+                          Цвет
                           <input
                             value={editingDetailsRow.color ?? ""}
                             onChange={(event) => updateItemRow(editingDetailsRow.key, { color: event.target.value })}
@@ -666,7 +661,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           onClick={() => setEditingDetailsForKey(null)}
                           className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                         >
-                          Р“РѕС‚РѕРІРѕ
+                          Готово
                         </button>
                       </div>
                     </div>
@@ -682,10 +677,10 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                       className="w-full max-w-md rounded-xl border border-[var(--border)] bg-white p-4 shadow-xl"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      <p className="text-sm font-semibold text-slate-900">РР·РјРµРЅРёС‚СЊ С†РµРЅСѓ</p>
+                      <p className="text-sm font-semibold text-slate-900">Изменить цену</p>
                       <div className="mt-3 grid gap-2">
                         <label className="grid gap-1 text-xs text-slate-600">
-                          РЎРµР±РµСЃС‚РѕРёРјРѕСЃС‚СЊ Р·Р° РµРґ. (USD)
+                          Себестоимость за ед. (USD)
                           <input
                             value={editingPriceRow.unitPriceUSD ?? ""}
                             onChange={(event) => updateItemRow(editingPriceRow.key, { unitPriceUSD: event.target.value })}
@@ -696,7 +691,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           />
                         </label>
                         <label className="grid gap-1 text-xs text-slate-600">
-                          Р¦РµРЅР° РїСЂРѕРґР°Р¶Рё Р·Р° РµРґ. (USD)
+                          Цена продажи за ед. (USD)
                           <input
                             value={editingPriceRow.salePriceUSD ?? ""}
                             onChange={(event) => updateItemRow(editingPriceRow.key, { salePriceUSD: event.target.value })}
@@ -707,7 +702,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           />
                         </label>
                         <label className="grid gap-1 text-xs text-slate-600">
-                          РЎСѓРјРјР° С‚РѕРІР°СЂР° (USD)
+                          Сумма товара (USD)
                           <input
                             value={editingPriceRow.lineTotalUSD ?? ""}
                             onChange={(event) => updateItemRow(editingPriceRow.key, { lineTotalUSD: event.target.value })}
@@ -724,7 +719,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           onClick={() => setEditingPriceForKey(null)}
                           className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                         >
-                          Р“РѕС‚РѕРІРѕ
+                          Готово
                         </button>
                       </div>
                     </div>
@@ -736,10 +731,10 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
               <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
                 <p>
-                  РЎСѓРјРјР° С‚РѕРІР°СЂРѕРІ: <span className="font-semibold text-slate-900">${itemsPurchaseUsd.toFixed(2)}</span>
+                  Сумма товаров: <span className="font-semibold text-slate-900">${itemsPurchaseUsd.toFixed(2)}</span>
                 </p>
                 <p>
-                  РћР±С‰Р°СЏ СЃСѓРјРјР° РєРѕРЅС‚РµР№РЅРµСЂР°:{" "}
+                  Общая сумма контейнера:{" "}
                   <span className="font-semibold text-slate-900">${totalPurchaseUsd.toFixed(2)}</span>
                 </p>
               </div>
@@ -748,7 +743,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                 onClick={() => setItemsModalOpen(false)}
                 className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Р“РѕС‚РѕРІРѕ
+                Готово
               </button>
             </div>
           </div>
@@ -757,5 +752,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
     </>
   );
 }
+
+
 
 

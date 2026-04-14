@@ -1,4 +1,4 @@
-п»ї"use server";
+"use server";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -11,7 +11,7 @@ import { INVESTORS_MANAGE_ROLES } from "@/lib/rbac";
 
 function assertCanManage(role: string) {
   if (!INVESTORS_MANAGE_ROLES.includes(role as (typeof INVESTORS_MANAGE_ROLES)[number])) {
-    throw new Error("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ РёРЅРІРµСЃС‚РѕСЂР°РјРё.");
+    throw new Error("Недостаточно прав для управления инвесторами.");
   }
 }
 
@@ -25,7 +25,7 @@ export async function createInvestorAction(formData: FormData) {
   const userId = String(formData.get("userId") ?? "").trim();
 
   if (!name) {
-    throw new Error("РЈРєР°Р¶РёС‚Рµ РёРјСЏ РёРЅРІРµСЃС‚РѕСЂР°.");
+    throw new Error("Укажите имя инвестора.");
   }
 
   const investor = await prisma.investor.create({
@@ -58,9 +58,14 @@ export async function addContainerInvestmentAction(formData: FormData) {
   const containerId = String(formData.get("containerId") ?? "");
   const investorId = String(formData.get("investorId") ?? "");
   const investedAmountUSD = toNumber(formData.get("investedAmountUSD"));
+  const percentageShare = toNumber(formData.get("percentageShare"));
 
   if (!containerId || !investorId || !Number.isFinite(investedAmountUSD) || investedAmountUSD <= 0) {
-    throw new Error("РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ РёРЅРІРµСЃС‚РёС†РёРё.");
+    throw new Error("Проверьте данные инвестиции.");
+  }
+  const hasManualShare = Number.isFinite(percentageShare) && percentageShare > 0;
+  if (hasManualShare && percentageShare > 100) {
+    throw new Error("Процент должен быть от 0 до 100.");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -68,9 +73,16 @@ export async function addContainerInvestmentAction(formData: FormData) {
       where: { containerId_investorId: { containerId, investorId } },
     });
     if (existing) {
+      const data: { investedAmountUSD: number; percentageShare?: number; isManualShare?: boolean } = {
+        investedAmountUSD: existing.investedAmountUSD + investedAmountUSD,
+      };
+      if (hasManualShare) {
+        data.percentageShare = percentageShare;
+        data.isManualShare = true;
+      }
       await tx.containerInvestment.update({
         where: { id: existing.id },
-        data: { investedAmountUSD: existing.investedAmountUSD + investedAmountUSD },
+        data,
       });
     } else {
       await tx.containerInvestment.create({
@@ -78,7 +90,8 @@ export async function addContainerInvestmentAction(formData: FormData) {
           containerId,
           investorId,
           investedAmountUSD,
-          percentageShare: 0,
+          percentageShare: hasManualShare ? percentageShare : 0,
+          isManualShare: hasManualShare,
         },
       });
     }
@@ -100,12 +113,12 @@ export async function createInvestorPayoutAction(formData: FormData) {
   const payoutDateRaw = String(formData.get("payoutDate") ?? "").trim();
 
   if (!containerId) {
-    throw new Error("РќРµ СѓРєР°Р·Р°РЅ РєРѕРЅС‚РµР№РЅРµСЂ.");
+    throw new Error("Не указан контейнер.");
   }
 
   try {
     if (!investorId || !Number.isFinite(amountUSD) || amountUSD <= 0) {
-      throw new Error("РџСЂРѕРІРµСЂСЊС‚Рµ РґР°РЅРЅС‹Рµ РІС‹РїР»Р°С‚С‹.");
+      throw new Error("Проверьте данные выплаты.");
     }
 
     await prisma.$transaction(async (tx) => {
@@ -118,10 +131,10 @@ export async function createInvestorPayoutAction(formData: FormData) {
       ]);
 
       if (!container || !investment) {
-        throw new Error("РРЅРІРµСЃС‚РѕСЂ РЅРµ РїСЂРёРІСЏР·Р°РЅ Рє РєРѕРЅС‚РµР№РЅРµСЂСѓ.");
+        throw new Error("Инвестор не привязан к контейнеру.");
       }
       if (container.status === "IN_TRANSIT") {
-        throw new Error("Р’С‹РїР»Р°С‚Р° РёРЅРІРµСЃС‚РѕСЂСѓ РґРѕСЃС‚СѓРїРЅР° С‚РѕР»СЊРєРѕ РїРѕСЃР»Рµ РїСЂРёР±С‹С‚РёСЏ РєРѕРЅС‚РµР№РЅРµСЂР°.");
+        throw new Error("Выплата инвестору доступна только после прибытия контейнера.");
       }
 
       const soldItems = await tx.saleItem.findMany({
@@ -152,7 +165,7 @@ export async function createInvestorPayoutAction(formData: FormData) {
       const available = Math.max(0, shareAmountUSD - paid);
 
       if (amountUSD > available + 0.0001) {
-        throw new Error("РЎСѓРјРјР° РІС‹РїР»Р°С‚С‹ РїСЂРµРІС‹С€Р°РµС‚ РґРѕСЃС‚СѓРїРЅСѓСЋ СЃСѓРјРјСѓ РёР· СЂРµР°Р»СЊРЅРѕР№ РїСЂРёР±С‹Р»Рё.");
+        throw new Error("Сумма выплаты превышает доступную сумму из реальной прибыли.");
       }
 
       await tx.investorPayout.create({
@@ -171,9 +184,10 @@ export async function createInvestorPayoutAction(formData: FormData) {
     revalidatePath("/containers");
     revalidatePath(`/containers/${containerId}`);
     revalidatePath("/investor");
-    redirect(`/containers/${containerId}?success=${encodeURIComponent("Р’С‹РїР»Р°С‚Р° РёРЅРІРµСЃС‚РѕСЂСѓ РїСЂРѕРІРµРґРµРЅР°.")}`);
+    redirect(`/containers/${containerId}?success=${encodeURIComponent("Выплата инвестору проведена.")}`);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕРІРµСЃС‚Рё РІС‹РїР»Р°С‚Сѓ РёРЅРІРµСЃС‚РѕСЂСѓ.";
+    const message = error instanceof Error ? error.message : "Не удалось провести выплату инвестору.";
     redirect(`/containers/${containerId}?error=${encodeURIComponent(message)}`);
   }
 }
+

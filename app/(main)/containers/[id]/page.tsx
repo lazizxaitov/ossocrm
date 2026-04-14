@@ -1,4 +1,4 @@
-п»їimport Link from "next/link";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AddItemModal } from "@/app/(main)/containers/add-item-modal";
 import { CustomDateInput } from "@/components/custom-date-input";
@@ -132,7 +132,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
           <div>
             <h2 className="text-xl font-semibold text-slate-900">{container.name}</h2>
             <p className="mt-1 text-sm text-slate-600">
-              РЎС‚Р°С‚СѓСЃ: <span className="font-medium text-slate-800">{ruStatus(container.status)}</span>
+              Статус: <span className="font-medium text-slate-800">{ruStatus(container.status)}</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -140,7 +140,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               href={`/api/containers/${container.id}/export`}
               className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Р­РєСЃРїРѕСЂС‚ РІ Excel
+              Экспорт в Excel
             </Link>
             {canManage ? (
               <AddItemModal
@@ -155,7 +155,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               href="/containers"
               className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              Рљ СЃРїРёСЃРєСѓ
+              К списку
             </Link>
           </div>
         </div>
@@ -169,34 +169,34 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
 
       <div className="grid gap-4 md:grid-cols-6">
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-          <p className="text-xs text-slate-500">Р—Р°РєСѓРїРєР° CNY</p>
+          <p className="text-xs text-slate-500">Закупка CNY</p>
           <p className="mt-2 text-xl font-semibold text-slate-900">{container.totalPurchaseCNY.toFixed(2)}</p>
         </article>
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-          <p className="text-xs text-slate-500">РљСѓСЂСЃ CNY в†’ USD</p>
+          <p className="text-xs text-slate-500">Курс CNY > USD</p>
           <p className="mt-2 text-xl font-semibold text-slate-900">{container.exchangeRate.toFixed(4)}</p>
         </article>
         {showFinance ? (
           <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <p className="text-xs text-slate-500">Р—Р°РєСѓРїРєР° USD</p>
+            <p className="text-xs text-slate-500">Закупка USD</p>
             <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(container.totalPurchaseUSD)}</p>
           </article>
         ) : null}
         {showFinance ? (
           <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <p className="text-xs text-slate-500">Р Р°СЃС…РѕРґС‹ USD</p>
+            <p className="text-xs text-slate-500">Расходы USD</p>
             <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(container.totalExpensesUSD)}</p>
           </article>
         ) : null}
         {showFinance ? (
           <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <p className="text-xs text-slate-500">РџР»Р°РЅРёСЂСѓРµРјР°СЏ РїСЂРёР±С‹Р»СЊ (СЃСѓРјРјР° РїСЂРѕРґР°Р¶)</p>
+            <p className="text-xs text-slate-500">Планируемая прибыль (сумма продаж)</p>
             <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(plannedProfitUSD)}</p>
           </article>
         ) : null}
         {showFinance ? (
           <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <p className="text-xs text-slate-500">Р РµР°Р»СЊРЅР°СЏ РїСЂРёР±С‹Р»СЊ (РІ РїСЂРѕРґР°Р¶Р°С…)</p>
+            <p className="text-xs text-slate-500">Реальная прибыль (в продажах)</p>
             <p className="mt-2 text-xl font-semibold text-slate-900">{formatUsd(factualProfitUSD)}</p>
           </article>
         ) : null}
@@ -204,13 +204,13 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
 
       {canManage ? (
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-          <h3 className="mb-2 text-base font-semibold text-slate-900">РР·РјРµРЅРёС‚СЊ СЃС‚Р°С‚СѓСЃ РєРѕРЅС‚РµР№РЅРµСЂР°</h3>
+          <h3 className="mb-2 text-base font-semibold text-slate-900">Изменить статус контейнера</h3>
           <form action={updateContainerStatusAction} className="flex flex-wrap items-center gap-2">
             <input type="hidden" name="containerId" value={container.id} />
-            <CustomSelect name="status" defaultValue={container.status} className="min-w-[160px]" options={[{ value: "IN_TRANSIT", label: "Р’ РїСѓС‚Рё" }, { value: "ARRIVED", label: "РџСЂРёР±С‹Р»" }, { value: "CLOSED", label: "Р—Р°РєСЂС‹С‚" }]} />
-            <CustomDateInput name="arrivalDate" placeholder="Р”Р°С‚Р° РїСЂРёР±С‹С‚РёСЏ" className="min-w-[170px]" />
+            <CustomSelect name="status" defaultValue={container.status} className="min-w-[160px]" options={[{ value: "IN_TRANSIT", label: "В пути" }, { value: "ARRIVED", label: "Прибыл" }, { value: "CLOSED", label: "Закрыт" }]} />
+            <CustomDateInput name="arrivalDate" placeholder="Дата прибытия" className="min-w-[170px]" />
             <button type="submit" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-              РЎРѕС…СЂР°РЅРёС‚СЊ
+              Сохранить
             </button>
           </form>
         </article>
@@ -220,39 +220,47 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-semibold text-slate-900">РРЅРІРµСЃС‚РѕСЂС‹ РєРѕРЅС‚РµР№РЅРµСЂР°</h3>
+              <h3 className="text-base font-semibold text-slate-900">Инвесторы контейнера</h3>
               <p className="text-sm text-slate-600">
-                Р’Р»РѕР¶РµРЅРѕ: {formatUsd(investedTotal)} | РћР¶РёРґР°РµРјРѕ: {formatUsd(expected)}
+                Вложено: {formatUsd(investedTotal)} | Ожидаемо: {formatUsd(expected)}
               </p>
               <p className="text-sm text-slate-600">
-                РџР»Р°РЅ РїРѕ РєРѕРЅС‚РµР№РЅРµСЂСѓ: {formatUsd(plannedProfitUSD)} | Р¤Р°РєС‚ РїСЂРѕРґР°Р¶: {formatUsd(factualProfitUSD)}
+                План по контейнеру: {formatUsd(plannedProfitUSD)} | Факт продаж: {formatUsd(factualProfitUSD)}
               </p>
               <p className="text-sm text-slate-600">
-                Р§РёСЃС‚Р°СЏ РїСЂРёР±С‹Р»СЊ (СЃ СѓС‡С‘С‚РѕРј СЂР°СЃС…РѕРґРѕРІ): {formatUsd(container.netProfitUSD)}
+                Чистая прибыль (с учётом расходов): {formatUsd(container.netProfitUSD)}
               </p>
               <p className="text-xs text-slate-500">
-                Р’С‹РїР»Р°С‚С‹ РёРЅРІРµСЃС‚РѕСЂР°Рј РґРѕСЃС‚СѓРїРЅС‹ РїРѕСЃР»Рµ РїСЂРёР±С‹С‚РёСЏ РєРѕРЅС‚РµР№РЅРµСЂР° Рё С‚РѕР»СЊРєРѕ РёР· СЂРµР°Р»СЊРЅРѕР№ РїСЂРёР±С‹Р»Рё РІ РїСЂРѕРґР°Р¶Р°С….
+                Выплаты инвесторам доступны после прибытия контейнера и только из реальной прибыли в продажах.
               </p>
-              {mismatch ? <p className="text-sm font-medium text-orange-700">Р•СЃС‚СЊ СЂР°СЃС…РѕР¶РґРµРЅРёРµ СЃСѓРјРј РёРЅРІРµСЃС‚РёС†РёР№.</p> : null}
+              {mismatch ? <p className="text-sm font-medium text-orange-700">Есть расхождение сумм инвестиций.</p> : null}
             </div>
           </div>
 
           {canManageInvestors ? (
-            <div className="mb-3 grid gap-2 rounded-xl border border-[var(--border)] p-3 md:grid-cols-5">
+            <div className="mb-3 grid gap-2 rounded-xl border border-[var(--border)] p-3 md:grid-cols-6">
               <form action={addContainerInvestmentAction} className="contents">
                 <input type="hidden" name="containerId" value={container.id} />
-                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Р’С‹Р±РµСЂРёС‚Рµ РёРЅРІРµСЃС‚РѕСЂР°" options={investorsSorted.map((investor) => ({ value: investor.id, label: investor.name }))} />
+                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Выберите инвестора" options={investorsSorted.map((investor) => ({ value: investor.id, label: investor.name }))} />
                 <input
                   name="investedAmountUSD"
                   type="number"
                   min="0.01"
                   step="0.01"
                   required
-                  placeholder="РЎСѓРјРјР° РІР»РѕР¶РµРЅРёСЏ USD"
+                  placeholder="Сумма вложения USD"
                   className="rounded border border-[var(--border)] px-2 py-2 text-sm md:col-span-2"
                 />
+                <input
+                  name="percentageShare"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Процент % (необязательно)"
+                  className="rounded border border-[var(--border)] px-2 py-2 text-sm md:col-span-1"
+                />
                 <button type="submit" className="rounded bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-                  Р”РѕР±Р°РІРёС‚СЊ РёРЅРІРµСЃС‚РёС†РёСЋ
+                  Добавить инвестицию
                 </button>
               </form>
             </div>
@@ -262,14 +270,14 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
             <table className="w-full text-left text-sm">
               <thead className="bg-[var(--surface-soft)] text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-medium">РРЅРІРµСЃС‚РѕСЂ</th>
-                  <th className="px-3 py-2 font-medium">Р’Р»РѕР¶РёР»</th>
+                  <th className="px-3 py-2 font-medium">Инвестор</th>
+                  <th className="px-3 py-2 font-medium">Вложил</th>
                   <th className="px-3 py-2 font-medium">%</th>
-                  <th className="px-3 py-2 font-medium">РџР»Р°РЅ РїСЂРёР±С‹Р»СЊ</th>
-                  <th className="px-3 py-2 font-medium">Р Р°СЃС…РѕРґС‹ (РґРѕР»СЏ)</th>
-                  <th className="px-3 py-2 font-medium">Р¤Р°РєС‚ РїСЂРёР±С‹Р»СЊ</th>
-                  <th className="px-3 py-2 font-medium">Р’С‹РїР»Р°С‡РµРЅРѕ</th>
-                  <th className="px-3 py-2 font-medium">РћСЃС‚Р°С‚РѕРє Рє РІС‹РїР»Р°С‚Рµ</th>
+                  <th className="px-3 py-2 font-medium">План прибыль</th>
+                  <th className="px-3 py-2 font-medium">Расходы (доля)</th>
+                  <th className="px-3 py-2 font-medium">Факт прибыль</th>
+                  <th className="px-3 py-2 font-medium">Выплачено</th>
+                  <th className="px-3 py-2 font-medium">Остаток к выплате</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,7 +304,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                 {!container.investments.length ? (
                   <tr>
                     <td className="px-3 py-4 text-center text-slate-500" colSpan={8}>
-                      РРЅРІРµСЃС‚РѕСЂС‹ РЅРµ РґРѕР±Р°РІР»РµРЅС‹.
+                      Инвесторы не добавлены.
                     </td>
                   </tr>
                 ) : null}
@@ -306,22 +314,22 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
 
           {canManageInvestors ? (
             <div className="mt-3 rounded-xl border border-[var(--border)] p-3">
-              <h4 className="mb-2 text-sm font-semibold text-slate-900">РЎРѕР·РґР°С‚СЊ РІС‹РїР»Р°С‚Сѓ РёРЅРІРµСЃС‚РѕСЂСѓ</h4>
-              <form action={createInvestorPayoutAction} className="grid gap-2 md:grid-cols-5">
+              <h4 className="mb-2 text-sm font-semibold text-slate-900">Создать выплату инвестору</h4>
+              <form action={createInvestorPayoutAction} className="grid gap-2 md:grid-cols-6">
                 <input type="hidden" name="containerId" value={container.id} />
-                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="РРЅРІРµСЃС‚РѕСЂ" options={containerInvestmentsSorted.map((row) => ({ value: row.investorId, label: row.investor.name }))} />
+                <CustomSelect name="investorId" required className="md:col-span-2" placeholder="Инвестор" options={containerInvestmentsSorted.map((row) => ({ value: row.investorId, label: row.investor.name }))} />
                 <input
                   name="amountUSD"
                   type="number"
                   min="0.01"
                   step="0.01"
                   required
-                  placeholder="РЎСѓРјРјР° РІС‹РїР»Р°С‚С‹ USD"
+                  placeholder="Сумма выплаты USD"
                   className="rounded border border-[var(--border)] px-2 py-2 text-sm md:col-span-2"
                 />
-                <CustomDateInput name="payoutDate" placeholder="Р”Р°С‚Р° РІС‹РїР»Р°С‚С‹" className="min-w-[170px]" />
+                <CustomDateInput name="payoutDate" placeholder="Дата выплаты" className="min-w-[170px]" />
                 <button type="submit" className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90 md:col-span-5">
-                  РџСЂРѕРІРµСЃС‚Рё РІС‹РїР»Р°С‚Сѓ
+                  Провести выплату
                 </button>
               </form>
             </div>
@@ -332,10 +340,10 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
       {showFinance && canViewExpenses ? (
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-base font-semibold text-slate-900">Р Р°СЃС…РѕРґС‹ РєРѕРЅС‚РµР№РЅРµСЂР°</h3>
+            <h3 className="text-base font-semibold text-slate-900">Расходы контейнера</h3>
             {container.status === "CLOSED" ? (
               <p className="text-xs font-medium text-orange-700">
-                РљРѕРЅС‚РµР№РЅРµСЂ Р·Р°РєСЂС‹С‚: РґРѕР±Р°РІР»РµРЅРёРµ СЂР°СЃС…РѕРґРѕРІ Рё РєРѕСЂСЂРµРєС‚РёСЂРѕРІРѕРє РЅРµРґРѕСЃС‚СѓРїРЅРѕ.
+                Контейнер закрыт: добавление расходов и корректировок недоступно.
               </p>
             ) : null}
           </div>
@@ -346,29 +354,29 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               <input
                 name="title"
                 required
-                placeholder="РќР°Р·РІР°РЅРёРµ СЂР°СЃС…РѕРґР°"
+                placeholder="Название расхода"
                 className="rounded border border-[var(--border)] px-2 py-2 text-sm md:col-span-2"
               />
-              <CustomSelect name="category" defaultValue="LOGISTICS" options={[{ value: "LOGISTICS", label: "Р›РѕРіРёСЃС‚РёРєР°" }, { value: "CUSTOMS", label: "РўР°РјРѕР¶РЅСЏ" }, { value: "STORAGE", label: "РҐСЂР°РЅРµРЅРёРµ" }, { value: "TRANSPORT", label: "РўСЂР°РЅСЃРїРѕСЂС‚" }, { value: "OTHER", label: "Р”СЂСѓРіРѕРµ" }]} />
+              <CustomSelect name="category" defaultValue="LOGISTICS" options={[{ value: "LOGISTICS", label: "Логистика" }, { value: "CUSTOMS", label: "Таможня" }, { value: "STORAGE", label: "Хранение" }, { value: "TRANSPORT", label: "Транспорт" }, { value: "OTHER", label: "Другое" }]} />
               <input
                 name="amountUSD"
                 type="number"
                 min="0.01"
                 step="0.01"
                 required
-                placeholder="РЎСѓРјРјР° USD"
+                placeholder="Сумма USD"
                 className="rounded border border-[var(--border)] px-2 py-2 text-sm"
               />
               <input
                 name="description"
-                placeholder="РћРїРёСЃР°РЅРёРµ"
+                placeholder="Описание"
                 className="rounded border border-[var(--border)] px-2 py-2 text-sm md:col-span-2"
               />
               <button
                 type="submit"
                 className="rounded bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 md:col-span-6"
               >
-                Р”РѕР±Р°РІРёС‚СЊ СЂР°СЃС…РѕРґ
+                Добавить расход
               </button>
             </form>
           ) : null}
@@ -377,12 +385,12 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
             <table className="w-full text-left text-sm">
               <thead className="bg-[var(--surface-soft)] text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Р”Р°С‚Р°</th>
-                  <th className="px-3 py-2 font-medium">РљР°С‚РµРіРѕСЂРёСЏ</th>
-                  <th className="px-3 py-2 font-medium">РЎСѓРјРјР°</th>
-                  <th className="px-3 py-2 font-medium">РљРѕСЂСЂРµРєС†РёРё</th>
-                  <th className="px-3 py-2 font-medium">РС‚РѕРі</th>
-                  {canCorrectExpense ? <th className="px-3 py-2 font-medium">Р”РµР№СЃС‚РІРёСЏ</th> : null}
+                  <th className="px-3 py-2 font-medium">Дата</th>
+                  <th className="px-3 py-2 font-medium">Категория</th>
+                  <th className="px-3 py-2 font-medium">Сумма</th>
+                  <th className="px-3 py-2 font-medium">Коррекции</th>
+                  <th className="px-3 py-2 font-medium">Итог</th>
+                  {canCorrectExpense ? <th className="px-3 py-2 font-medium">Действия</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -411,14 +419,14 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                                   <form key={row.id} action={confirmExpenseCorrectionAction} className="flex items-center gap-2">
                                     <input type="hidden" name="correctionId" value={row.id} />
                                     <span className="text-xs text-orange-700">
-                                      РќРµРїРѕРґС‚РІ. {formatUsd(row.correctionAmountUSD)}
+                                      Неподтв. {formatUsd(row.correctionAmountUSD)}
                                     </span>
                                     {container.status !== "CLOSED" ? (
                                       <button
                                         type="submit"
                                         className="rounded border border-[var(--border)] px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                                       >
-                                        РџРѕРґС‚РІРµСЂРґРёС‚СЊ
+                                        Подтвердить
                                       </button>
                                     ) : null}
                                   </form>
@@ -439,18 +447,18 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                               <input
                                 name="reason"
                                 required
-                                placeholder="РџСЂРёС‡РёРЅР° РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєРё"
+                                placeholder="Причина корректировки"
                                 className="rounded border border-[var(--border)] px-2 py-1 text-xs"
                               />
                               <button
                                 type="submit"
                                 className="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:opacity-90"
                               >
-                                Р”РѕР±Р°РІРёС‚СЊ РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєСѓ
+                                Добавить корректировку
                               </button>
                             </form>
                           ) : (
-                            <span className="text-xs text-slate-500">РќРµРґРѕСЃС‚СѓРїРЅРѕ</span>
+                            <span className="text-xs text-slate-500">Недоступно</span>
                           )}
                         </td>
                       ) : null}
@@ -460,7 +468,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
                 {!container.expenses.length ? (
                   <tr>
                     <td className="px-3 py-4 text-center text-slate-500" colSpan={canCorrectExpense ? 6 : 5}>
-                      Р Р°СЃС…РѕРґРѕРІ РїРѕРєР° РЅРµС‚.
+                      Расходов пока нет.
                     </td>
                   </tr>
                 ) : null}
@@ -475,18 +483,18 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
           <thead className="bg-[var(--surface-soft)] text-slate-600">
             <tr>
               <th className="px-3 py-2 font-medium">SKU</th>
-              <th className="px-3 py-2 font-medium">РўРѕРІР°СЂ</th>
-              <th className="px-3 py-2 font-medium">Р Р°Р·РјРµСЂ</th>
-              <th className="px-3 py-2 font-medium">Р¦РІРµС‚</th>
-              <th className="px-3 py-2 font-medium">РљРѕР»РёС‡РµСЃС‚РІРѕ</th>
-              {showFinance ? <th className="px-3 py-2 font-medium">Р¦РµРЅР° Р·Р° РµРґ. (USD)</th> : null}
-              {showFinance ? <th className="px-3 py-2 font-medium">Р¦РµРЅР° РїСЂРѕРґР°Р¶Рё (USD)</th> : null}
-              {showFinance ? <th className="px-3 py-2 font-medium">РЎСѓРјРјР° (USD)</th> : null}
+              <th className="px-3 py-2 font-medium">Товар</th>
+              <th className="px-3 py-2 font-medium">Размер</th>
+              <th className="px-3 py-2 font-medium">Цвет</th>
+              <th className="px-3 py-2 font-medium">Количество</th>
+              {showFinance ? <th className="px-3 py-2 font-medium">Цена за ед. (USD)</th> : null}
+              {showFinance ? <th className="px-3 py-2 font-medium">Цена продажи (USD)</th> : null}
+              {showFinance ? <th className="px-3 py-2 font-medium">Сумма (USD)</th> : null}
               <th className="px-3 py-2 font-medium">CBM</th>
               <th className="px-3 py-2 font-medium">KG</th>
               <th className="px-3 py-2 font-medium">TOTAL CBM</th>
-              {showFinance ? <th className="px-3 py-2 font-medium">РЎРµР±РµСЃС‚РѕРёРјРѕСЃС‚СЊ Р·Р° РµРґ. (USD)</th> : null}
-              <th className="px-3 py-2 font-medium">Р”РѕР±Р°РІР»РµРЅРѕ</th>
+              {showFinance ? <th className="px-3 py-2 font-medium">Себестоимость за ед. (USD)</th> : null}
+              <th className="px-3 py-2 font-medium">Добавлено</th>
             </tr>
           </thead>
           <tbody>
@@ -494,27 +502,27 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
               <tr key={item.id} className="border-t border-[var(--border)]">
                 <td className="px-3 py-2 text-slate-700">{item.product.sku}</td>
                 <td className="px-3 py-2 text-slate-800">{item.product.name}</td>
-                <td className="px-3 py-2 text-slate-700">{item.sizeLabel ?? item.product.size ?? "вЂ”"}</td>
-                <td className="px-3 py-2 text-slate-700">{item.color ?? "вЂ”"}</td>
+                <td className="px-3 py-2 text-slate-700">{item.sizeLabel ?? item.product.size ?? "—"}</td>
+                <td className="px-3 py-2 text-slate-700">{item.color ?? "—"}</td>
                 <td className="px-3 py-2 text-slate-700">{item.quantity}</td>
                 {showFinance ? (
                   <td className="px-3 py-2 text-slate-700">
-                    {item.unitPriceUSD !== null ? `$${item.unitPriceUSD.toFixed(2)}` : "вЂ”"}
+                    {item.unitPriceUSD !== null ? `$${item.unitPriceUSD.toFixed(2)}` : "—"}
                   </td>
                 ) : null}
                 {showFinance ? (
                   <td className="px-3 py-2 text-slate-700">
-                    {item.salePriceUSD !== null ? `$${item.salePriceUSD.toFixed(2)}` : "вЂ”"}
+                    {item.salePriceUSD !== null ? `$${item.salePriceUSD.toFixed(2)}` : "—"}
                   </td>
                 ) : null}
                 {showFinance ? (
                   <td className="px-3 py-2 text-slate-700">
-                    {item.lineTotalUSD !== null ? `$${item.lineTotalUSD.toFixed(2)}` : "вЂ”"}
+                    {item.lineTotalUSD !== null ? `$${item.lineTotalUSD.toFixed(2)}` : "—"}
                   </td>
                 ) : null}
-                <td className="px-3 py-2 text-slate-700">{item.cbm !== null ? item.cbm.toFixed(4) : "вЂ”"}</td>
-                <td className="px-3 py-2 text-slate-700">{item.kg !== null ? item.kg.toFixed(2) : "вЂ”"}</td>
-                <td className="px-3 py-2 text-slate-700">{item.totalCbm !== null ? item.totalCbm.toFixed(4) : "вЂ”"}</td>
+                <td className="px-3 py-2 text-slate-700">{item.cbm !== null ? item.cbm.toFixed(4) : "—"}</td>
+                <td className="px-3 py-2 text-slate-700">{item.kg !== null ? item.kg.toFixed(2) : "—"}</td>
+                <td className="px-3 py-2 text-slate-700">{item.totalCbm !== null ? item.totalCbm.toFixed(4) : "—"}</td>
                 {showFinance ? <td className="px-3 py-2 text-slate-700">${item.costPerUnitUSD.toFixed(4)}</td> : null}
                 <td className="px-3 py-2 text-slate-600">{new Date(item.createdAt).toLocaleDateString("ru-RU")}</td>
               </tr>
@@ -522,7 +530,7 @@ export default async function ContainerDetailPage({ params, searchParams }: Cont
             {!container.items.length ? (
               <tr>
                 <td className="px-3 py-6 text-center text-slate-500" colSpan={showFinance ? 13 : 8}>
-                  Р’ РєРѕРЅС‚РµР№РЅРµСЂ РїРѕРєР° РЅРµ РґРѕР±Р°РІР»РµРЅС‹ С‚РѕРІР°СЂС‹.
+                  В контейнер пока не добавлены товары.
                 </td>
               </tr>
             ) : null}

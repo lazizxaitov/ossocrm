@@ -330,6 +330,7 @@ model ContainerInvestment {
   investorId        String
   investedAmountUSD Float
   percentageShare   Float
+  isManualShare     Boolean   @default(false)
   createdAt         DateTime  @default(now())
   container         Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
   investor          Investor  @relation(fields: [investorId], references: [id], onDelete: Restrict)
@@ -519,3 +520,5 @@ model InventorySessionItem {
   @@index([containerId])
   @@index([containerItemId])
 }
+
+

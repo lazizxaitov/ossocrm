@@ -1,4 +1,4 @@
-п»ї"use server";
+"use server";
 
 import { ContainerStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -6,7 +6,6 @@ import { getRequiredSession } from "@/lib/auth";
 import { recalculateContainerFinancials } from "@/lib/container-finance";
 import { recalculateContainerUnitCost } from "@/lib/container-cost";
 import { toNumber } from "@/lib/currency";
-import { assertOpenPeriodForDate } from "@/lib/financial-period";
 import { recalculateContainerInvestmentShares } from "@/lib/investor";
 import { prisma } from "@/lib/prisma";
 import { CONTAINERS_MANAGE_ROLES } from "@/lib/rbac";
@@ -18,7 +17,7 @@ export type CreateContainerFormState = {
 
 function requireContainerManageRole(role: string) {
   if (!CONTAINERS_MANAGE_ROLES.includes(role as (typeof CONTAINERS_MANAGE_ROLES)[number])) {
-    throw new Error("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ РґР»СЏ РёР·РјРµРЅРµРЅРёСЏ РєРѕРЅС‚РµР№РЅРµСЂР°.");
+    throw new Error("Недостаточно прав для изменения контейнера.");
   }
 }
 
@@ -47,32 +46,27 @@ export async function createContainerAction(
     const purchaseDateRaw = String(formData.get("purchaseDate") ?? "").trim();
     const arrivalDateRaw = String(formData.get("arrivalDate") ?? "").trim();
     const totalPurchaseCNY = toNumber(formData.get("totalPurchaseCNY"));
-    const initialExpensesUSD = toNumber(formData.get("initialExpensesUSD"));
     const exchangeRateRaw = String(formData.get("exchangeRate") ?? "").trim();
     const investmentsJson = String(formData.get("investmentsJson") ?? "[]");
     const containerItemsJson = String(formData.get("containerItemsJson") ?? "[]");
 
     if (!name) {
-      return { error: "Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ РєРѕРЅС‚РµР№РЅРµСЂР°.", success: false };
+      return { error: "Введите название контейнера.", success: false };
     }
     if (!purchaseDateRaw) {
-      return { error: "Р’С‹Р±РµСЂРёС‚Рµ РґР°С‚Сѓ Р·Р°РєСѓРїРєРё.", success: false };
+      return { error: "Выберите дату закупки.", success: false };
     }
     const parsedPurchaseDate = new Date(purchaseDateRaw);
     if (Number.isNaN(parsedPurchaseDate.getTime())) {
-      return { error: "РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РґР°С‚Р° Р·Р°РєСѓРїРєРё.", success: false };
+      return { error: "Некорректная дата закупки.", success: false };
     }
     const parsedArrivalDate = arrivalDateRaw ? new Date(arrivalDateRaw) : null;
     if (parsedArrivalDate && Number.isNaN(parsedArrivalDate.getTime())) {
-      return { error: "РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РґР°С‚Р° РїСЂРёР±С‹С‚РёСЏ.", success: false };
+      return { error: "Некорректная дата прибытия.", success: false };
     }
     if (!Number.isFinite(totalPurchaseCNY) || totalPurchaseCNY <= 0) {
-      return { error: "Р’РІРµРґРёС‚Рµ СЃСѓРјРјСѓ Р·Р°РєСѓРїРєРё РІ CNY Р±РѕР»СЊС€Рµ 0.", success: false };
+      return { error: "Введите сумму закупки в CNY больше 0.", success: false };
     }
-    if (!Number.isFinite(initialExpensesUSD) || initialExpensesUSD < 0) {
-      return { error: "Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅСѓСЋ СЃСѓРјРјСѓ СЂР°СЃС…РѕРґРѕРІ USD.", success: false };
-    }
-
     const latestCurrency = await prisma.currencySetting.findFirst({
       orderBy: { updatedAt: "desc" },
     });
@@ -80,13 +74,13 @@ export async function createContainerAction(
     const exchangeRate =
       exchangeRateRaw.length > 0 ? toNumber(exchangeRateRaw) : (latestCurrency?.cnyToUsdRate ?? NaN);
 
-    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) {
-      return { error: "РќРµРІРµСЂРЅС‹Р№ РєСѓСЂСЃ CNY в†’ USD.", success: false };
+      return { error: "Неверный курс CNY > USD.", success: false };
+      return { error: "Неверный курс CNY > USD.", success: false };
     }
 
     const baseTotalPurchaseUSD = totalPurchaseCNY * exchangeRate;
 
-    type InvestmentInput = { investorId: string; investedAmountUSD: number };
+    type InvestmentInput = { investorId: string; investedAmountUSD: number; percentageShare?: number };
     type ContainerItemInput = {
       productId: string;
       sizeLabel?: string;
@@ -113,9 +107,16 @@ export async function createContainerAction(
       containerItemsInput = [];
     }
 
-    const cleanedInvestments = investmentsInput.filter(
-      (row) => row.investorId && Number.isFinite(row.investedAmountUSD) && row.investedAmountUSD > 0,
-    );
+    const cleanedInvestments = investmentsInput
+      .map((row) => {
+        const percentageShare = Number(row.percentageShare);
+        return {
+          investorId: row.investorId,
+          investedAmountUSD: Number(row.investedAmountUSD),
+          percentageShare: Number.isFinite(percentageShare) && percentageShare > 0 ? percentageShare : 0,
+        };
+      })
+      .filter((row) => row.investorId && Number.isFinite(row.investedAmountUSD) && row.investedAmountUSD > 0);
     const rawItems = containerItemsInput.filter(
       (row) =>
         row.productId &&
@@ -149,8 +150,6 @@ export async function createContainerAction(
       0,
     );
     const totalPurchaseUSD = Math.max(baseTotalPurchaseUSD, itemsPurchaseUSD);
-    const initialExpensePeriod = initialExpensesUSD > 0 ? await assertOpenPeriodForDate(new Date()) : null;
-
     await prisma.$transaction(async (tx) => {
       const container = await tx.container.create({
         data: {
@@ -164,28 +163,14 @@ export async function createContainerAction(
           arrivalDate: parsedArrivalDate,
         },
       });
-
-      if (initialExpensesUSD > 0 && initialExpensePeriod) {
-        await tx.containerExpense.create({
-          data: {
-            containerId: container.id,
-            title: "РЎС‚Р°СЂС‚РѕРІС‹Р№ СЂР°СЃС…РѕРґ",
-            category: "OTHER",
-            amountUSD: initialExpensesUSD,
-            description: "Р Р°СЃС…РѕРґ РґРѕР±Р°РІР»РµРЅ РїСЂРё СЃРѕР·РґР°РЅРёРё РєРѕРЅС‚РµР№РЅРµСЂР°.",
-            financialPeriodId: initialExpensePeriod.id,
-            createdById: session.userId,
-          },
-        });
-      }
-
       if (cleanedInvestments.length > 0) {
         await tx.containerInvestment.createMany({
           data: cleanedInvestments.map((row) => ({
             containerId: container.id,
             investorId: row.investorId,
             investedAmountUSD: row.investedAmountUSD,
-            percentageShare: 0,
+            percentageShare: Number.isFinite(row.percentageShare) ? row.percentageShare : 0,
+            isManualShare: Number.isFinite(row.percentageShare) && row.percentageShare > 0,
           })),
         });
         await recalculateContainerInvestmentShares(container.id, tx);
@@ -229,7 +214,7 @@ export async function createContainerAction(
     revalidatePath("/containers");
     return { error: null, success: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РєРѕРЅС‚РµР№РЅРµСЂ.";
+    const message = error instanceof Error ? error.message : "Не удалось создать контейнер.";
     return { error: message, success: false };
   }
 }
@@ -243,7 +228,7 @@ export async function updateContainerStatusAction(formData: FormData) {
   const arrivalDateRaw = String(formData.get("arrivalDate") ?? "").trim();
 
   if (!containerId || !Object.values(ContainerStatus).includes(statusRaw as ContainerStatus)) {
-    throw new Error("РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ Р·Р°РїСЂРѕСЃ СЃРјРµРЅС‹ СЃС‚Р°С‚СѓСЃР°.");
+    throw new Error("Некорректный запрос смены статуса.");
   }
 
   const status = statusRaw as ContainerStatus;
@@ -277,7 +262,7 @@ export async function addContainerItemAction(formData: FormData) {
   const totalCbm = toNumber(formData.get("totalCbm"));
 
   if (!containerId || !productId || !Number.isFinite(quantity) || quantity <= 0) {
-    throw new Error("РџСЂРѕРІРµСЂСЊС‚Рµ С‚РѕРІР°СЂ Рё РєРѕР»РёС‡РµСЃС‚РІРѕ.");
+    throw new Error("Проверьте товар и количество.");
   }
 
   const unitPriceValue = Number.isFinite(unitPriceUSD) && unitPriceUSD >= 0 ? unitPriceUSD : null;
@@ -294,14 +279,14 @@ export async function addContainerItemAction(formData: FormData) {
     });
 
     if (!container) {
-      throw new Error("РљРѕРЅС‚РµР№РЅРµСЂ РЅРµ РЅР°Р№РґРµРЅ.");
+      throw new Error("Контейнер не найден.");
     }
 
     if (container.status === ContainerStatus.CLOSED) {
-      throw new Error("РќРµР»СЊР·СЏ РґРѕР±Р°РІР»СЏС‚СЊ С‚РѕРІР°СЂС‹ РІ Р·Р°РєСЂС‹С‚С‹Р№ РєРѕРЅС‚РµР№РЅРµСЂ.");
+      throw new Error("Нельзя добавлять товары в закрытый контейнер.");
     }
     if (container.status === ContainerStatus.IN_TRANSIT) {
-      throw new Error("РќРµР»СЊР·СЏ РёР·РјРµРЅСЏС‚СЊ С‚РѕРІР°СЂС‹ РєРѕРЅС‚РµР№РЅРµСЂР° СЃРѕ СЃС‚Р°С‚СѓСЃРѕРј В«Р’ РїСѓС‚РёВ».");
+      throw new Error("Нельзя изменять товары контейнера со статусом «В пути».");
     }
 
     const existing = await tx.containerItem.findUnique({
@@ -370,3 +355,7 @@ export async function addContainerItemAction(formData: FormData) {
   revalidatePath("/containers");
   revalidatePath(`/containers/${containerId}`);
 }
+
+
+
+

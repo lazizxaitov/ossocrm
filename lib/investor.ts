@@ -3,6 +3,26 @@ import { prisma } from "@/lib/prisma";
 
 type TxClient = Prisma.TransactionClient;
 
+type InvestmentRow = {
+  id: string;
+  investedAmountUSD: number;
+  percentageShare: number;
+  isManualShare: boolean;
+};
+
+function computeAutoShares(rows: InvestmentRow[]) {
+  const manualRows = rows.filter((row) => row.isManualShare && row.percentageShare > 0);
+  const autoRows = rows.filter((row) => !(row.isManualShare && row.percentageShare > 0));
+  const manualTotal = manualRows.reduce((sum, row) => sum + row.percentageShare, 0);
+  const remaining = Math.max(0, 100 - manualTotal);
+  const autoTotal = autoRows.reduce((sum, row) => sum + row.investedAmountUSD, 0);
+
+  return autoRows.map((row) => ({
+    id: row.id,
+    percentageShare: autoTotal > 0 ? (row.investedAmountUSD / autoTotal) * remaining : 0,
+  }));
+}
+
 export async function recalculateContainerInvestmentShares(
   containerId: string,
   tx: TxClient = prisma as unknown as TxClient,
@@ -14,21 +34,32 @@ export async function recalculateContainerInvestmentShares(
     }),
     tx.containerInvestment.findMany({
       where: { containerId },
-      select: { id: true, investedAmountUSD: true },
+      select: { id: true, investedAmountUSD: true, percentageShare: true, isManualShare: true },
     }),
   ]);
 
   if (!container) {
-    throw new Error("РљРѕРЅС‚РµР№РЅРµСЂ РЅРµ РЅР°Р№РґРµРЅ.");
+    throw new Error("Контейнер не найден.");
   }
 
   const total = investments.reduce((sum, row) => sum + row.investedAmountUSD, 0);
-  for (const row of investments) {
-    const percentageShare = total > 0 ? (row.investedAmountUSD / total) * 100 : 0;
-    await tx.containerInvestment.update({
-      where: { id: row.id },
-      data: { percentageShare },
-    });
+
+  if (investments.some((row) => row.isManualShare && row.percentageShare > 0)) {
+    const updates = computeAutoShares(investments);
+    for (const row of updates) {
+      await tx.containerInvestment.update({
+        where: { id: row.id },
+        data: { percentageShare: row.percentageShare },
+      });
+    }
+  } else {
+    for (const row of investments) {
+      const percentageShare = total > 0 ? (row.investedAmountUSD / total) * 100 : 0;
+      await tx.containerInvestment.update({
+        where: { id: row.id },
+        data: { percentageShare },
+      });
+    }
   }
 
   const expected = container.totalPurchaseUSD + container.totalExpensesUSD;
