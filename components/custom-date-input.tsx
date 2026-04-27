@@ -82,6 +82,8 @@ export function CustomDateInput({
 
   useEffect(() => {
     if (!isControlled) {
+      // We intentionally sync internal state when `defaultValue` changes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInternalValue(defaultValue ?? "");
     }
   }, [defaultValue, isControlled]);

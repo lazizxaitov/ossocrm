@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 function formatTime(seconds: number) {
   const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
@@ -19,14 +19,14 @@ export function AutoLogoutTimer({ idleLimitMinutes = 10 }: AutoLogoutTimerProps)
   const deadlineRef = useRef(Date.now() + idleLimitSeconds * 1000);
   const loggingOutRef = useRef(false);
 
-  function resetTimer() {
+  const resetTimer = useCallback(() => {
     deadlineRef.current = Date.now() + idleLimitSeconds * 1000;
     setRemaining(idleLimitSeconds);
-  }
+  }, [idleLimitSeconds]);
 
   useEffect(() => {
     resetTimer();
-  }, [idleLimitSeconds]);
+  }, [resetTimer]);
 
   useEffect(() => {
     const events: Array<keyof WindowEventMap> = ["mousemove", "keydown", "click", "scroll", "touchstart"];
@@ -44,7 +44,7 @@ export function AutoLogoutTimer({ idleLimitMinutes = 10 }: AutoLogoutTimerProps)
         window.removeEventListener(eventName, onActivity);
       }
     };
-  }, [idleLimitSeconds]);
+  }, [resetTimer]);
 
   useEffect(() => {
     function isFormEditingTarget(target: EventTarget | null) {

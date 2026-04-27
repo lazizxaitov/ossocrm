@@ -1,9 +1,9 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { getRequiredSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 function inventoryStatusLabel(status: "PENDING" | "CONFIRMED" | "DISCREPANCY") {
-  if (status === "PENDING") return "Ожидает подтверждения";
+  if (status === "PENDING") return "Не подтверждена (старый формат)";
   if (status === "CONFIRMED") return "Подтверждена";
   return "Есть расхождения";
 }
@@ -43,7 +43,7 @@ export default async function WarehouseHistoryPage() {
           <thead className="bg-[var(--surface-soft)] text-slate-600">
             <tr>
               <th className="px-3 py-2 font-medium">Дата</th>
-              <th className="px-3 py-2 font-medium">Код</th>
+              <th className="px-3 py-2 font-medium">Номер</th>
               <th className="px-3 py-2 font-medium">Статус</th>
               <th className="px-3 py-2 font-medium">Расхождения</th>
               <th className="px-3 py-2 font-medium">Создал</th>
@@ -55,7 +55,7 @@ export default async function WarehouseHistoryPage() {
               <tr key={row.id} className="border-t border-[var(--border)]">
                 <td className="px-3 py-2 text-slate-700">{new Date(row.createdAt).toLocaleString("ru-RU")}</td>
                 <td className="px-3 py-2 font-semibold text-slate-800">
-                  {row.status === "CONFIRMED" ? row.code : "Скрыт"}
+                  {row.code}
                 </td>
                 <td className="px-3 py-2 text-slate-700">{inventoryStatusLabel(row.status)}</td>
                 <td className="px-3 py-2 text-slate-700">{row.discrepancyCount}</td>

@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { assertOpenPeriodById, getCurrentFinancialPeriod } from "@/lib/financial-period";
-import { canAccessWarehouseApi, generateInventoryCode, refreshSystemControlByInventory } from "@/lib/inventory";
+import { canAccessWarehouseApi, refreshSystemControlByInventory } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 
 type SubmitPayload = {
@@ -120,11 +120,8 @@ export async function POST(request: Request) {
 
   const discrepancyRows = itemRows.filter((row) => row.difference !== 0);
   const status =
-    discrepancyRows.length > 0 ? InventorySessionStatus.DISCREPANCY : InventorySessionStatus.PENDING;
-  const code =
-    status === InventorySessionStatus.DISCREPANCY
-      ? `DISC-${randomUUID()}`
-      : await generateInventoryCode();
+    discrepancyRows.length > 0 ? InventorySessionStatus.DISCREPANCY : InventorySessionStatus.CONFIRMED;
+  const code = `${status === InventorySessionStatus.DISCREPANCY ? "DISC" : "INV"}-${randomUUID()}`;
 
   const created = await prisma.$transaction(async (tx) => {
     const sessionRecord = await tx.inventorySession.create({
@@ -135,6 +132,9 @@ export async function POST(request: Request) {
         discrepancyCount: discrepancyRows.length,
         financialPeriodId: currentPeriodId,
         createdById: session.userId,
+        confirmedById: status === InventorySessionStatus.CONFIRMED ? session.userId : null,
+        confirmedAt: status === InventorySessionStatus.CONFIRMED ? new Date() : null,
+        sentToAdminAt: status === InventorySessionStatus.CONFIRMED ? new Date() : null,
       },
     });
 
@@ -178,7 +178,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     sessionId: created.id,
-    code: created.status === InventorySessionStatus.DISCREPANCY ? null : created.code,
     status: created.status,
     discrepancyCount: discrepancyRows.length,
     shortage,

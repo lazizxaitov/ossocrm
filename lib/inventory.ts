@@ -5,15 +5,6 @@ export function canAccessWarehouseApi(role: Role) {
   return role === "WAREHOUSE" || role === "ADMIN" || role === "SUPER_ADMIN";
 }
 
-export async function generateInventoryCode(db: PrismaClient = prisma) {
-  for (let i = 0; i < 50; i++) {
-    const code = String(Math.floor(100 + Math.random() * 900));
-    const existing = await db.inventorySession.findUnique({ where: { code } });
-    if (!existing) return code;
-  }
-  throw new Error("Не удалось сгенерировать код инвентаризации.");
-}
-
 export async function refreshSystemControlByInventory(db: PrismaClient = prisma) {
   const discrepancyCount = await db.inventorySession.count({
     where: { status: InventorySessionStatus.DISCREPANCY },

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -34,7 +34,6 @@ type DiscrepancyDetailsModalProps = {
 const INITIAL_RESOLVE_STATE: ResolveDiscrepancyState = {
   error: null,
   success: null,
-  code: null,
 };
 
 function possibleReason(difference: number) {
@@ -190,7 +189,7 @@ export function DiscrepancyDetailsModal({
               {resolveState.error ? <p className="mt-2 text-xs text-rose-700">{resolveState.error}</p> : null}
               {resolveState.success ? (
                 <p className="mt-2 text-xs text-emerald-700">
-                  {resolveState.success} Новый код: <span className="font-semibold">{resolveState.code}</span>
+                  {resolveState.success}
                 </p>
               ) : null}
             </div>

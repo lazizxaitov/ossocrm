@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 function containerStatusLabel(status: "IN_TRANSIT" | "ARRIVED" | "CLOSED") {
@@ -138,35 +138,37 @@ export default async function WarehousePage({ searchParams }: WarehousePageProps
         </div>
 
         <div className="hidden lg:block">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[var(--surface-soft)] text-slate-600">
-              <tr>
-                <th className="px-3 py-2 font-medium">Товар</th>
-                <th className="px-3 py-2 font-medium">SKU</th>
-                <th className="px-3 py-2 font-medium">Контейнер</th>
-                <th className="px-3 py-2 font-medium">Статус</th>
-                <th className="px-3 py-2 font-medium">Дата заказа</th>
-                <th className="px-3 py-2 font-medium">Дата прихода</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t border-[var(--border)]">
-                  <td className="px-3 py-2 text-slate-800">{row.product.name}</td>
-                  <td className="px-3 py-2 text-slate-700">{row.product.sku}</td>
-                  <td className="px-3 py-2 text-slate-700">{row.container.name}</td>
-                  <td className="px-3 py-2 text-slate-700">{containerStatusLabel(row.container.status)}</td>
-                  <td className="px-3 py-2 text-slate-600">{new Date(row.container.purchaseDate).toLocaleDateString("ru-RU")}</td>
-                  <td className="px-3 py-2 text-slate-600">{row.container.arrivalDate ? new Date(row.container.arrivalDate).toLocaleDateString("ru-RU") : "—"}</td>
-                </tr>
-              ))}
-              {!rows.length ? (
-                <tr>
-                  <td className="px-3 py-6 text-center text-slate-500" colSpan={6}>
-                    По текущему фильтру товары не найдены.
-                  </td>
-                </tr>
-              ) : null}
+	          <table className="w-full text-left text-sm">
+	            <thead className="bg-[var(--surface-soft)] text-slate-600">
+	              <tr>
+	                <th className="px-3 py-2 font-medium">Товар</th>
+	                <th className="px-3 py-2 font-medium">SKU</th>
+	                <th className="px-3 py-2 font-medium">Кол-во</th>
+	                <th className="px-3 py-2 font-medium">Контейнер</th>
+	                <th className="px-3 py-2 font-medium">Статус</th>
+	                <th className="px-3 py-2 font-medium">Дата заказа</th>
+	                <th className="px-3 py-2 font-medium">Дата прихода</th>
+	              </tr>
+	            </thead>
+	            <tbody>
+	              {rows.map((row) => (
+	                <tr key={row.id} className="border-t border-[var(--border)]">
+	                  <td className="px-3 py-2 text-slate-800">{row.product.name}</td>
+	                  <td className="px-3 py-2 text-slate-700">{row.product.sku}</td>
+	                  <td className="px-3 py-2 text-slate-700">{row.quantity}</td>
+	                  <td className="px-3 py-2 text-slate-700">{row.container.name}</td>
+	                  <td className="px-3 py-2 text-slate-700">{containerStatusLabel(row.container.status)}</td>
+	                  <td className="px-3 py-2 text-slate-600">{new Date(row.container.purchaseDate).toLocaleDateString("ru-RU")}</td>
+	                  <td className="px-3 py-2 text-slate-600">{row.container.arrivalDate ? new Date(row.container.arrivalDate).toLocaleDateString("ru-RU") : "—"}</td>
+	                </tr>
+	              ))}
+	              {!rows.length ? (
+	                <tr>
+	                  <td className="px-3 py-6 text-center text-slate-500" colSpan={7}>
+	                    По текущему фильтру товары не найдены.
+	                  </td>
+	                </tr>
+	              ) : null}
             </tbody>
           </table>
         </div>
@@ -174,4 +176,3 @@ export default async function WarehousePage({ searchParams }: WarehousePageProps
     </section>
   );
 }
-

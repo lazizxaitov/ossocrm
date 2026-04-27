@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createProductAction } from "@/app/(main)/products/actions";
 import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
 import { CustomSelect } from "@/components/custom-select";
@@ -27,7 +28,22 @@ type SizeApiResponse = {
   error?: string;
 };
 
+type ExcelDraftProductRow = {
+  key: number;
+  include: boolean;
+  sku: string;
+  name: string;
+  size: string;
+  color: string;
+  costPriceUSD: string;
+  cbm: string;
+  kg: string;
+  salePriceUSD: string;
+  imageFile: File | null;
+};
+
 export function CreateProductModal({ existingSizes, categories }: CreateProductModalProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [sizeMiniModalOpen, setSizeMiniModalOpen] = useState(false);
@@ -36,6 +52,14 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
 
   const [localSizes, setLocalSizes] = useState(existingSizes);
+
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
+  const [importPending, setImportPending] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [excelPreviewOpen, setExcelPreviewOpen] = useState(false);
+  const [excelPreviewCloseConfirmOpen, setExcelPreviewCloseConfirmOpen] = useState(false);
+  const [excelDraftRows, setExcelDraftRows] = useState<ExcelDraftProductRow[]>([]);
+  const [excelDraftNextKey, setExcelDraftNextKey] = useState(1);
 
   const [newSizeName, setNewSizeName] = useState("");
   const [sizeError, setSizeError] = useState("");
@@ -187,6 +211,219 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
     setConfirmCloseOpen(true);
   }
 
+  function openExcelPicker() {
+    if (importPending) return;
+    setImportError("");
+    excelInputRef.current?.click();
+  }
+
+  function requestCloseExcelPreview() {
+    setExcelPreviewCloseConfirmOpen(true);
+  }
+
+  function closeExcelPreview() {
+    setExcelPreviewCloseConfirmOpen(false);
+    setExcelPreviewOpen(false);
+    setExcelDraftRows([]);
+    setExcelDraftNextKey(1);
+    setImportError("");
+  }
+
+  function updateExcelDraftRow(key: number, patch: Partial<ExcelDraftProductRow>) {
+    setExcelDraftRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  function removeExcelDraftRow(key: number) {
+    setExcelDraftRows((prev) => prev.filter((row) => row.key !== key));
+  }
+
+  async function parseExcelToDraft(file: File) {
+    setImportPending(true);
+    setImportError("");
+
+    try {
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(await file.arrayBuffer());
+
+      const normalizeText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim();
+      const cellValue = (value: unknown) => {
+        if (!value) return null;
+        if (typeof value === "object" && value !== null) {
+          if ("result" in value) return (value as { result: unknown }).result ?? null;
+          if ("text" in value) return (value as { text: unknown }).text ?? null;
+          if ("richText" in value) {
+            const parts = (value as { richText: Array<{ text: string }> }).richText ?? [];
+            return parts.map((p) => p.text).join("");
+          }
+        }
+        return value;
+      };
+      const toNumberSafe = (value: unknown) => {
+        const raw = cellValue(value);
+        if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+        const n = Number(normalizeText(raw).replace(",", "."));
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const looksLikeImportSheet = (ws: (typeof wb.worksheets)[number]) => {
+        const headerCell = ws.getRow(3).getCell(2).value;
+        const header = normalizeText(cellValue(headerCell)).toLowerCase();
+        return header.includes("model");
+      };
+
+      const ws = wb.worksheets.find(looksLikeImportSheet) ?? wb.worksheets[0];
+      if (!ws) throw new Error("Лист Excel не найден.");
+
+      const imageByRow = new Map<number, File>();
+      for (const ref of ws.getImages()) {
+        const imageId = typeof ref.imageId === "number" ? ref.imageId : Number(ref.imageId);
+        const img = wb.getImage(Number.isFinite(imageId) ? imageId : (ref.imageId as unknown as number)) as {
+          extension?: string;
+          buffer?: Uint8Array | ArrayBuffer;
+        };
+        const rowIndex = (ref.range?.tl?.nativeRow ?? 0) + 1;
+        const ext = String(img.extension ?? "png").toLowerCase();
+        const mime =
+          ext === "jpg" || ext === "jpeg"
+            ? "image/jpeg"
+            : ext === "webp"
+              ? "image/webp"
+              : ext === "gif"
+                ? "image/gif"
+                : "image/png";
+
+        const buf = img.buffer;
+        if (!buf) continue;
+        const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : buf;
+        const safeBytes = new Uint8Array(bytes.byteLength);
+        safeBytes.set(bytes);
+        const fileName = `excel-${rowIndex}.${ext === "jpeg" ? "jpg" : ext}`;
+        imageByRow.set(rowIndex, new File([safeBytes], fileName, { type: mime }));
+      }
+
+      const draft: ExcelDraftProductRow[] = [];
+      let nextKey = excelDraftNextKey;
+      let emptyStreak = 0;
+
+      for (let r = 4; r <= ws.rowCount; r++) {
+        const row = ws.getRow(r);
+
+        const skuPrimary = normalizeText(cellValue(row.getCell(5).value));
+        const skuFallback = normalizeText(cellValue(row.getCell(2).value));
+        const sku = skuPrimary || skuFallback;
+
+        if (!sku) {
+          emptyStreak += 1;
+          if (emptyStreak >= 15) break;
+          continue;
+        }
+        emptyStreak = 0;
+
+        const brand = normalizeText(cellValue(row.getCell(4).value));
+        const size = normalizeText(cellValue(row.getCell(8).value)) || "Без размера";
+        const color = normalizeText(cellValue(row.getCell(9).value));
+        const costPriceUSD = toNumberSafe(row.getCell(7).value);
+        const cbm = toNumberSafe(row.getCell(12).value);
+        const kg = toNumberSafe(row.getCell(13).value);
+        const salePriceUSD = toNumberSafe(row.getCell(43).value) || costPriceUSD;
+        const name = brand ? `${brand} ${sku}` : sku;
+
+        if (!costPriceUSD || !salePriceUSD) continue;
+
+        draft.push({
+          key: nextKey,
+          include: true,
+          sku,
+          name,
+          size,
+          color,
+          costPriceUSD: String(costPriceUSD),
+          cbm: cbm > 0 ? String(cbm) : "",
+          kg: kg > 0 ? String(kg) : "",
+          salePriceUSD: String(salePriceUSD),
+          imageFile: imageByRow.get(r) ?? null,
+        });
+        nextKey += 1;
+      }
+
+      if (!draft.length) throw new Error("Не нашли строки товаров (проверьте формат файла).");
+
+      setExcelDraftRows(draft);
+      setExcelDraftNextKey(nextKey);
+      setExcelPreviewOpen(true);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Ошибка импорта Excel.");
+    } finally {
+      setImportPending(false);
+    }
+  }
+
+  async function confirmExcelImport() {
+    setImportPending(true);
+    setImportError("");
+
+    try {
+      const toNumber = (value: string) => {
+        const normalized = String(value ?? "").trim().replace(",", ".");
+        const n = Number(normalized);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const cleaned = excelDraftRows
+        .filter((row) => row.include)
+        .map((row) => ({
+          sku: row.sku.trim(),
+          name: row.name.trim(),
+          size: row.size.trim() || "Без размера",
+          color: row.color.trim(),
+          costPriceUSD: toNumber(row.costPriceUSD),
+          cbm: toNumber(row.cbm),
+          kg: toNumber(row.kg),
+          salePriceUSD: toNumber(row.salePriceUSD),
+          imageFile: row.imageFile,
+        }))
+        .filter((row) => row.sku && row.name && row.costPriceUSD > 0 && row.salePriceUSD > 0);
+
+      if (!cleaned.length) {
+        throw new Error("Нет товаров для импорта (проверьте SKU/название/цены).");
+      }
+
+      const form = new FormData();
+      const rowsForServer = cleaned.map((row, idx) => {
+        const imageKey = row.imageFile ? `img_${idx}_${row.sku}` : null;
+        if (imageKey && row.imageFile) form.set(imageKey, row.imageFile);
+        return {
+          sku: row.sku,
+          name: row.name,
+          size: row.size,
+          color: row.color || null,
+          costPriceUSD: row.costPriceUSD,
+          cbm: row.cbm > 0 ? row.cbm : null,
+          kg: row.kg > 0 ? row.kg : null,
+          salePriceUSD: row.salePriceUSD,
+          imageKey,
+        };
+      });
+      form.set("rowsJson", JSON.stringify(rowsForServer));
+
+      const response = await fetch("/api/products/import-from-excel", { method: "POST", body: form });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Не удалось импортировать товары.");
+      }
+
+      closeExcelPreview();
+      setOpen(false);
+      setConfirmCloseOpen(false);
+      router.refresh();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Ошибка импорта Excel.");
+    } finally {
+      setImportPending(false);
+    }
+  }
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -197,6 +434,25 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
         >
           Добавить товар
         </button>
+        <button
+          type="button"
+          onClick={openExcelPicker}
+          disabled={importPending}
+          className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {importPending ? "Импорт..." : "Импорт из Excel"}
+        </button>
+        <input
+          ref={excelInputRef}
+          type="file"
+          accept=".xlsx"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void parseExcelToDraft(file);
+          }}
+        />
         <button
           type="button"
           onClick={() => {
@@ -346,16 +602,192 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
         confirmLabel="Закрыть"
         cancelLabel="Остаться"
         danger
-        onCancel={() => setConfirmCloseOpen(false)}
-        onConfirm={() => {
-          setConfirmCloseOpen(false);
-          setOpen(false);
-        }}
-      />
+	        onCancel={() => setConfirmCloseOpen(false)}
+	        onConfirm={() => {
+	          setConfirmCloseOpen(false);
+	          setExcelPreviewOpen(false);
+	          setExcelPreviewCloseConfirmOpen(false);
+	          setExcelDraftRows([]);
+	          setImportError("");
+	          setOpen(false);
+	        }}
+	      />
 
-      {sizeMiniModalOpen ? (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/45 p-4"
+	      <CustomConfirmDialog
+	        open={excelPreviewCloseConfirmOpen}
+	        title="Закрыть импорт Excel"
+	        message="Список импортируемых товаров будет потерян. Закрыть окно?"
+	        confirmLabel="Закрыть"
+	        cancelLabel="Остаться"
+	        danger
+	        pending={importPending}
+	        onCancel={() => setExcelPreviewCloseConfirmOpen(false)}
+	        onConfirm={closeExcelPreview}
+	      />
+
+	      {excelPreviewOpen ? (
+	        <div className="fixed inset-0 z-[70] bg-slate-900/50 p-4" onClick={requestCloseExcelPreview}>
+	          <div
+	            className="mx-auto flex max-h-[95vh] w-full max-w-6xl flex-col overflow-auto rounded-2xl bg-white p-4 shadow-xl"
+	            onClick={(event) => event.stopPropagation()}
+	          >
+	            <div className="flex flex-wrap items-center justify-between gap-2">
+	              <div>
+	                <h4 className="text-base font-semibold text-slate-900">Импорт товаров из Excel</h4>
+	                <p className="mt-1 text-xs text-slate-500">
+	                  Проверьте список, измените данные или удалите строки перед созданием товаров.
+	                </p>
+	              </div>
+	              <div className="flex items-center gap-2">
+	                <button
+	                  type="button"
+	                  onClick={requestCloseExcelPreview}
+	                  disabled={importPending}
+	                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+	                >
+	                  Отмена
+	                </button>
+	                <button
+	                  type="button"
+	                  onClick={() => void confirmExcelImport()}
+	                  disabled={importPending}
+	                  className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+	                >
+	                  {importPending ? "Импорт..." : "Подтвердить"}
+	                </button>
+	              </div>
+	            </div>
+
+	            {importError ? (
+	              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+	                {importError}
+	              </p>
+	            ) : null}
+
+	            <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)]">
+	              <table className="w-full text-left text-xs">
+	                <thead className="bg-[var(--surface-soft)] text-slate-600">
+	                  <tr>
+	                    <th className="px-2 py-2 font-medium">+</th>
+	                    <th className="px-2 py-2 font-medium">SKU</th>
+	                    <th className="px-2 py-2 font-medium">Название</th>
+	                    <th className="px-2 py-2 font-medium">Размер</th>
+	                    <th className="px-2 py-2 font-medium">Цвет</th>
+	                    <th className="px-2 py-2 font-medium">Себестоимость</th>
+	                    <th className="px-2 py-2 font-medium">Продажа</th>
+	                    <th className="px-2 py-2 font-medium">CBM</th>
+	                    <th className="px-2 py-2 font-medium">KG</th>
+	                    <th className="px-2 py-2 font-medium">Фото</th>
+	                    <th className="px-2 py-2 font-medium">Удалить</th>
+	                  </tr>
+	                </thead>
+	                <tbody>
+	                  {excelDraftRows.map((row) => (
+	                    <tr key={row.key} className="border-t border-[var(--border)] align-top">
+	                      <td className="px-2 py-2">
+	                        <input
+	                          type="checkbox"
+	                          checked={row.include}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { include: e.target.checked })}
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.sku}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { sku: e.target.value })}
+	                          className="w-28 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.name}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { name: e.target.value })}
+	                          className="w-64 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.size}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { size: e.target.value })}
+	                          className="w-32 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.color}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { color: e.target.value })}
+	                          className="w-32 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.costPriceUSD}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { costPriceUSD: e.target.value })}
+	                          type="number"
+	                          min={0}
+	                          step="0.01"
+	                          className="w-28 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.salePriceUSD}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { salePriceUSD: e.target.value })}
+	                          type="number"
+	                          min={0}
+	                          step="0.01"
+	                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.cbm}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { cbm: e.target.value })}
+	                          type="number"
+	                          min={0}
+	                          step="0.0001"
+	                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <input
+	                          value={row.kg}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { kg: e.target.value })}
+	                          type="number"
+	                          min={0}
+	                          step="0.01"
+	                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
+	                        />
+	                      </td>
+	                      <td className="px-2 py-2 text-slate-700">{row.imageFile ? "есть" : "—"}</td>
+	                      <td className="px-2 py-2">
+	                        <button
+	                          type="button"
+	                          onClick={() => removeExcelDraftRow(row.key)}
+	                          className="rounded border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+	                        >
+	                          X
+	                        </button>
+	                      </td>
+	                    </tr>
+	                  ))}
+	                  {!excelDraftRows.length ? (
+	                    <tr>
+	                      <td className="px-3 py-6 text-center text-slate-500" colSpan={11}>
+	                        Нет строк для импорта.
+	                      </td>
+	                    </tr>
+	                  ) : null}
+	                </tbody>
+	              </table>
+	            </div>
+	          </div>
+	        </div>
+	      ) : null}
+
+	      {sizeMiniModalOpen ? (
+	        <div
+	          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/45 p-4"
           onClick={() => {
             if (!sizeSaving) {
               setSizeMiniModalOpen(false);

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -14,8 +14,7 @@ type InventoryRow = {
 
 type SubmitResult = {
   sessionId: string;
-  code: string | null;
-  status: "PENDING" | "DISCREPANCY" | "CONFIRMED";
+  status: "DISCREPANCY" | "CONFIRMED";
   discrepancyCount: number;
   shortage: Array<{
     productName: string;
@@ -139,9 +138,9 @@ export function InventoryClient() {
 
       setResult(data);
       if (data.status === "DISCREPANCY") {
-        setError("Количество не совпадает с базой. Код не выдан. Отправьте расхождения администратору.");
+        setError("Количество не совпадает с базой. Отправьте расхождения администратору.");
       } else {
-        setMessage(`Ваш код: ${data.code}`);
+        setMessage("Инвентаризация подтверждена.");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка сохранения. Попробуйте еще раз.");
@@ -233,7 +232,6 @@ export function InventoryClient() {
       {result ? (
         <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
           <h3 className="text-base font-semibold text-slate-900">Результат проверки</h3>
-          <p className="mt-1 text-sm text-slate-700">Код подтверждения показан один раз после отправки.</p>
           <p className="text-sm text-slate-700">Расхождения: {result.discrepancyCount}</p>
 
           {result.discrepancyCount > 0 ? (
@@ -281,10 +279,10 @@ export function InventoryClient() {
             <div className="mt-3">
               <button
                 type="button"
-                onClick={() => void sendToAdmin()}
+                onClick={() => setResult(null)}
                 className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Отправить код администратору
+                Готово
               </button>
             </div>
           )}

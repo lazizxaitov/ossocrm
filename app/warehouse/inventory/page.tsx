@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { InventoryClient } from "@/app/warehouse/inventory/inventory-client";
 
 export default function WarehouseInventoryPage() {
@@ -9,7 +9,7 @@ export default function WarehouseInventoryPage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Инвентаризация</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Введите фактические количества. Система сравнит их с базой и выдаст код подтверждения.
+              Введите фактические количества. Если всё совпадает — сессия подтверждается сразу на складе.
             </p>
           </div>
           <Link
