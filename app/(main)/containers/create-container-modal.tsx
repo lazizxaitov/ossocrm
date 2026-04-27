@@ -205,10 +205,6 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
     setInvestorNextKey((value) => value + 1);
   }
 
-  function removeInvestorRow(key: number) {
-    setInvestorRows((prev) => prev.filter((row) => row.key !== key));
-  }
-
   function updateItemRow(key: number, patch: Partial<ItemRow>) {
     setItemRows((prev) =>
       prev.map((row) => {
@@ -732,15 +728,8 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                         value={row.percentageShare ?? ""}
                         onChange={(event) => updateInvestorRow(row.key, { percentageShare: event.target.value })}
                         placeholder="Процент % (необязательно)"
-                        className="md:col-span-2 rounded border border-[var(--border)] px-2 py-2 text-sm"
+                        className="md:col-span-3 rounded border border-[var(--border)] px-2 py-2 text-sm"
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeInvestorRow(row.key)}
-                        className="md:col-span-1 rounded border border-[var(--border)] px-2 py-2 text-xs text-slate-600 hover:bg-slate-50"
-                      >
-                        X
-                      </button>
                     </div>
                   ))}
                 </div>
