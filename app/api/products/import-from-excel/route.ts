@@ -19,6 +19,7 @@ type ImportRow = {
   kg?: number | null;
   salePriceUSD: number;
   imageKey?: string | null;
+  categoryId?: string | null;
 };
 
 function safeImageExt(file: File) {
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
       kg: Number.isFinite(Number(row.kg)) && Number(row.kg) > 0 ? Number(row.kg) : null,
       salePriceUSD: Number(row.salePriceUSD),
       imageKey: String(row.imageKey ?? "").trim() || null,
+      categoryId: String(row.categoryId ?? "").trim() || null,
     }))
     .filter((row) => row.sku && row.name && Number.isFinite(row.costPriceUSD) && row.costPriceUSD > 0 && Number.isFinite(row.salePriceUSD) && row.salePriceUSD > 0);
 
@@ -114,27 +116,73 @@ export async function POST(request: Request) {
     return NextResponse.json<ResponseBody>({ ok: false, error: "Строки не прошли проверку (SKU/название/цены)." }, { status: 400 });
   }
 
-  const products = await prisma.$transaction(async (tx) => {
-    const out: Array<{ id: string; sku: string; name: string; size: string; color: string | null; imagePath: string | null; costPriceUSD: number; cbm: number | null; kg: number | null; basePriceUSD: number }> = [];
+  try {
+    const products = await prisma.$transaction(async (tx) => {
+      const out: Array<{ id: string; sku: string; name: string; size: string; color: string | null; imagePath: string | null; costPriceUSD: number; cbm: number | null; kg: number | null; basePriceUSD: number }> = [];
 
-    for (const row of normalizedRows) {
-      const maybeImage = row.imageKey ? formData.get(row.imageKey) : null;
-      const imageFile = maybeImage instanceof File ? maybeImage : null;
-      const newImagePath = imageFile ? await saveProductImage(imageFile) : null;
+      const categoryIds = [...new Set(normalizedRows.map((row) => row.categoryId).filter(Boolean))] as string[];
+      if (categoryIds.length > 0) {
+        const existingCats = await tx.productCategory.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true },
+        });
+        const existingSet = new Set(existingCats.map((c) => c.id));
+        const missing = categoryIds.filter((id) => !existingSet.has(id));
+        if (missing.length > 0) {
+          throw new Error("Одна или несколько категорий не найдены. Обновите страницу и попробуйте снова.");
+        }
+      }
 
-      const existing = await tx.product.findUnique({ where: { sku: row.sku } });
-      if (existing) {
-        const updated = await tx.product.update({
-          where: { id: existing.id },
+      for (const row of normalizedRows) {
+        const maybeImage = row.imageKey ? formData.get(row.imageKey) : null;
+        const imageFile = maybeImage instanceof File ? maybeImage : null;
+        const newImagePath = imageFile ? await saveProductImage(imageFile) : null;
+
+        const existing = await tx.product.findUnique({ where: { sku: row.sku } });
+        if (existing) {
+          const updated = await tx.product.update({
+            where: { id: existing.id },
+            data: {
+              name: row.name,
+              size: row.size,
+              color: row.color,
+              costPriceUSD: row.costPriceUSD,
+              cbm: row.cbm,
+              kg: row.kg,
+              basePriceUSD: row.salePriceUSD,
+              imagePath: existing.imagePath ? undefined : newImagePath ?? undefined,
+              categoryId: row.categoryId,
+            },
+            select: {
+              id: true,
+              sku: true,
+              name: true,
+              size: true,
+              color: true,
+              imagePath: true,
+              costPriceUSD: true,
+              cbm: true,
+              kg: true,
+              basePriceUSD: true,
+            },
+          });
+          out.push(updated);
+          continue;
+        }
+
+        const created = await tx.product.create({
           data: {
+            sku: row.sku,
             name: row.name,
             size: row.size,
             color: row.color,
+            description: null,
+            imagePath: newImagePath,
             costPriceUSD: row.costPriceUSD,
             cbm: row.cbm,
             kg: row.kg,
             basePriceUSD: row.salePriceUSD,
-            imagePath: existing.imagePath ? undefined : newImagePath ?? undefined,
+            categoryId: row.categoryId,
           },
           select: {
             id: true,
@@ -149,43 +197,17 @@ export async function POST(request: Request) {
             basePriceUSD: true,
           },
         });
-        out.push(updated);
-        continue;
+        out.push(created);
       }
 
-      const created = await tx.product.create({
-        data: {
-          sku: row.sku,
-          name: row.name,
-          size: row.size,
-          color: row.color,
-          description: null,
-          imagePath: newImagePath,
-          costPriceUSD: row.costPriceUSD,
-          cbm: row.cbm,
-          kg: row.kg,
-          basePriceUSD: row.salePriceUSD,
-          categoryId: null,
-        },
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          size: true,
-          color: true,
-          imagePath: true,
-          costPriceUSD: true,
-          cbm: true,
-          kg: true,
-          basePriceUSD: true,
-        },
-      });
-      out.push(created);
-    }
+      return out;
+    });
 
-    return out;
-  });
-
-  return NextResponse.json<ResponseBody>({ ok: true, products });
+    return NextResponse.json<ResponseBody>({ ok: true, products });
+  } catch (e) {
+    return NextResponse.json<ResponseBody>(
+      { ok: false, error: e instanceof Error ? e.message : "Не удалось импортировать товары." },
+      { status: 400 },
+    );
+  }
 }
-

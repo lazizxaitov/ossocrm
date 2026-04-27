@@ -14,6 +14,7 @@ type ProductSizeItem = {
 type ProductCategoryItem = {
   id: string;
   name: string;
+  description?: string | null;
 };
 
 type CreateProductModalProps = {
@@ -33,6 +34,7 @@ type ExcelDraftProductRow = {
   include: boolean;
   sku: string;
   name: string;
+  categoryId: string;
   size: string;
   color: string;
   costPriceUSD: string;
@@ -47,11 +49,13 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
   const [open, setOpen] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [sizeMiniModalOpen, setSizeMiniModalOpen] = useState(false);
+  const [categoryMiniModalOpen, setCategoryMiniModalOpen] = useState(false);
   const [sizesModalOpen, setSizesModalOpen] = useState(false);
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
 
   const [localSizes, setLocalSizes] = useState(existingSizes);
+  const [localCategories, setLocalCategories] = useState(categories);
 
   const excelInputRef = useRef<HTMLInputElement | null>(null);
   const [importPending, setImportPending] = useState(false);
@@ -60,10 +64,16 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
   const [excelPreviewCloseConfirmOpen, setExcelPreviewCloseConfirmOpen] = useState(false);
   const [excelDraftRows, setExcelDraftRows] = useState<ExcelDraftProductRow[]>([]);
   const [excelDraftNextKey, setExcelDraftNextKey] = useState(1);
+  const [excelDefaultCategoryId, setExcelDefaultCategoryId] = useState("");
 
   const [newSizeName, setNewSizeName] = useState("");
   const [sizeError, setSizeError] = useState("");
   const [sizeSaving, setSizeSaving] = useState(false);
+
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryDescription, setNewCategoryDescription] = useState("");
+  const [categoryError, setCategoryError] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const [managerNewSize, setManagerNewSize] = useState("");
   const [managerError, setManagerError] = useState("");
@@ -77,14 +87,21 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
     [localSizes],
   );
   const categoryOptions = useMemo(
-    () => categories.map((category) => ({ value: category.id, label: category.name })),
-    [categories],
+    () => [{ value: "", label: "Без категории" }, ...localCategories.map((category) => ({ value: category.id, label: category.name }))],
+    [localCategories],
   );
 
   function upsertLocalSize(size: ProductSizeItem) {
     setLocalSizes((prev) => {
       const withoutCurrent = prev.filter((item) => item.id !== size.id);
       return [...withoutCurrent, size].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    });
+  }
+
+  function upsertLocalCategory(category: ProductCategoryItem) {
+    setLocalCategories((prev) => {
+      const withoutCurrent = prev.filter((item) => item.id !== category.id);
+      return [...withoutCurrent, category].sort((a, b) => a.name.localeCompare(b.name, "ru"));
     });
   }
 
@@ -108,6 +125,49 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
     upsertLocalSize(data.size);
     onSuccess?.(data.size);
     return { ok: true } as const;
+  }
+
+  async function createCategory(onSuccess?: (created: ProductCategoryItem) => void) {
+    const trimmedName = newCategoryName.trim();
+    if (!trimmedName) {
+      setCategoryError("Введите название категории.");
+      return { ok: false } as const;
+    }
+
+    const response = await fetch("/api/product-categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmedName, description: newCategoryDescription.trim() }),
+    });
+
+    const data = (await response.json()) as { ok?: boolean; category?: ProductCategoryItem; error?: string };
+    if (!response.ok || !data.ok || !data.category) {
+      setCategoryError(data.error ?? "Не удалось сохранить категорию.");
+      return { ok: false } as const;
+    }
+
+    upsertLocalCategory(data.category);
+    onSuccess?.(data.category);
+    return { ok: true } as const;
+  }
+
+  async function createCategoryFromMiniModal() {
+    setCategorySaving(true);
+    setCategoryError("");
+    try {
+      const result = await createCategory((created) => {
+        setSelectedCategoryId(created.id);
+        setExcelDefaultCategoryId(created.id);
+        setNewCategoryName("");
+        setNewCategoryDescription("");
+        setCategoryMiniModalOpen(false);
+      });
+      if (!result.ok) return;
+    } catch {
+      setCategoryError("Ошибка сети. Попробуйте снова.");
+    } finally {
+      setCategorySaving(false);
+    }
   }
 
   async function createSizeFromMiniModal() {
@@ -226,6 +286,7 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
     setExcelPreviewOpen(false);
     setExcelDraftRows([]);
     setExcelDraftNextKey(1);
+    setExcelDefaultCategoryId("");
     setImportError("");
   }
 
@@ -235,6 +296,10 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 
   function removeExcelDraftRow(key: number) {
     setExcelDraftRows((prev) => prev.filter((row) => row.key !== key));
+  }
+
+  function applyDefaultCategoryToDraft() {
+    setExcelDraftRows((prev) => prev.map((row) => ({ ...row, categoryId: excelDefaultCategoryId })));
   }
 
   async function parseExcelToDraft(file: File) {
@@ -305,6 +370,8 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
       const draft: ExcelDraftProductRow[] = [];
       let nextKey = excelDraftNextKey;
       let emptyStreak = 0;
+      const defaultCategoryId = selectedCategoryId;
+      setExcelDefaultCategoryId(defaultCategoryId);
 
       for (let r = 4; r <= ws.rowCount; r++) {
         const row = ws.getRow(r);
@@ -336,6 +403,7 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
           include: true,
           sku,
           name,
+          categoryId: defaultCategoryId,
           size,
           color,
           costPriceUSD: String(costPriceUSD),
@@ -375,6 +443,7 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
         .map((row) => ({
           sku: row.sku.trim(),
           name: row.name.trim(),
+          categoryId: row.categoryId.trim(),
           size: row.size.trim() || "Без размера",
           color: row.color.trim(),
           costPriceUSD: toNumber(row.costPriceUSD),
@@ -396,6 +465,7 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
         return {
           sku: row.sku,
           name: row.name,
+          categoryId: row.categoryId || null,
           size: row.size,
           color: row.color || null,
           costPriceUSD: row.costPriceUSD,
@@ -486,6 +556,19 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
                   placeholder="Категория (необязательно)"
                   options={categoryOptions}
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryError("");
+                    setNewCategoryName("");
+                    setNewCategoryDescription("");
+                    setCategoryMiniModalOpen(true);
+                  }}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  title="Добавить новую категорию"
+                >
+                  +
+                </button>
               </div>
 
               <input type="hidden" name="categoryId" value={selectedCategoryId} />
@@ -608,6 +691,7 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 	          setExcelPreviewOpen(false);
 	          setExcelPreviewCloseConfirmOpen(false);
 	          setExcelDraftRows([]);
+            setExcelDefaultCategoryId("");
 	          setImportError("");
 	          setOpen(false);
 	        }}
@@ -658,6 +742,36 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 	              </div>
 	            </div>
 
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                <CustomSelect
+                  value={excelDefaultCategoryId}
+                  onValueChange={setExcelDefaultCategoryId}
+                  placeholder="Категория по умолчанию"
+                  options={categoryOptions}
+                />
+                <button
+                  type="button"
+                  onClick={applyDefaultCategoryToDraft}
+                  disabled={importPending}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Применить ко всем
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryError("");
+                    setNewCategoryName("");
+                    setNewCategoryDescription("");
+                    setCategoryMiniModalOpen(true);
+                  }}
+                  disabled={importPending}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Новая категория
+                </button>
+              </div>
+
 	            {importError ? (
 	              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
 	                {importError}
@@ -665,12 +779,13 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 	            ) : null}
 
 	            <div className="mt-3 max-h-[70vh] overflow-auto rounded-xl border border-[var(--border)]">
-	              <table className="min-w-[1100px] w-full text-left text-xs">
+	              <table className="min-w-[1300px] w-full text-left text-xs">
 	                <thead className="bg-[var(--surface-soft)] text-slate-600">
 	                  <tr>
 	                    <th className="px-2 py-2 font-medium">+</th>
 	                    <th className="px-2 py-2 font-medium">SKU</th>
 	                    <th className="px-2 py-2 font-medium">Название</th>
+	                    <th className="px-2 py-2 font-medium">Категория</th>
 	                    <th className="px-2 py-2 font-medium">Размер</th>
 	                    <th className="px-2 py-2 font-medium">Цвет</th>
 	                    <th className="px-2 py-2 font-medium">Себестоимость</th>
@@ -704,6 +819,19 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 	                          onChange={(e) => updateExcelDraftRow(row.key, { name: e.target.value })}
 	                          className="w-64 rounded border border-[var(--border)] px-2 py-1"
 	                        />
+	                      </td>
+	                      <td className="px-2 py-2">
+	                        <select
+	                          value={row.categoryId}
+	                          onChange={(e) => updateExcelDraftRow(row.key, { categoryId: e.target.value })}
+	                          className="w-44 rounded border border-[var(--border)] bg-white px-2 py-1"
+	                        >
+	                          {categoryOptions.map((opt) => (
+	                            <option key={opt.value} value={opt.value}>
+	                              {opt.label}
+	                            </option>
+	                          ))}
+	                        </select>
 	                      </td>
 	                      <td className="px-2 py-2">
 	                        <input
@@ -773,7 +901,7 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 	                  ))}
 	                  {!excelDraftRows.length ? (
 	                    <tr>
-	                      <td className="px-3 py-6 text-center text-slate-500" colSpan={11}>
+	                      <td className="px-3 py-6 text-center text-slate-500" colSpan={12}>
 	                        Нет строк для импорта.
 	                      </td>
 	                    </tr>
@@ -818,6 +946,54 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
                 type="button"
                 onClick={() => setSizeMiniModalOpen(false)}
                 disabled={sizeSaving}
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {categoryMiniModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-900/45 p-4"
+          onClick={() => {
+            if (!categorySaving) {
+              setCategoryMiniModalOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <h4 className="text-sm font-semibold text-slate-900">Новая категория</h4>
+            <p className="mt-1 text-xs text-slate-500">Категория сохранится в базе и сразу появится в списке.</p>
+            <input
+              value={newCategoryName}
+              onChange={(event) => setNewCategoryName(event.target.value)}
+              placeholder="Название категории"
+              className="mt-3 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+              autoFocus
+            />
+            <textarea
+              value={newCategoryDescription}
+              onChange={(event) => setNewCategoryDescription(event.target.value)}
+              placeholder="Описание (необязательно)"
+              className="mt-2 min-h-20 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+            />
+            {categoryError ? <p className="mt-2 text-xs text-rose-600">{categoryError}</p> : null}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={createCategoryFromMiniModal}
+                disabled={categorySaving}
+                className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {categorySaving ? "Сохранение..." : "Сохранить"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryMiniModalOpen(false)}
+                disabled={categorySaving}
                 className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Отмена
