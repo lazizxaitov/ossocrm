@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { ClientDetailsModal } from "@/app/(main)/clients/client-details-modal";
 import { CreateClientModal } from "@/app/(main)/clients/create-client-modal";
+import { DeleteClientButton } from "@/app/(main)/clients/delete-client-button";
 import { EditClientModal } from "@/app/(main)/clients/edit-client-modal";
 import { getRequiredSession } from "@/lib/auth";
 import { formatUsd } from "@/lib/currency";
@@ -188,6 +189,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
               <th className="px-3 py-2 font-medium">Лимит USD</th>
               <th className="px-3 py-2 font-medium">Подробнее</th>
               {canManage ? <th className="px-3 py-2 font-medium">Изменить</th> : null}
+              {canManage ? <th className="px-3 py-2 font-medium">Удалить</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -247,12 +249,17 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
                       />
                     </td>
                   ) : null}
+                  {canManage ? (
+                    <td className="px-3 py-2">
+                      <DeleteClientButton clientId={client.id} clientName={client.name} />
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
             {!clients.length ? (
               <tr>
-                <td colSpan={canManage ? 9 : 8} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={canManage ? 10 : 8} className="px-3 py-6 text-center text-slate-500">
                   Ничего не найдено.
                 </td>
               </tr>
@@ -291,4 +298,3 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
     </section>
   );
 }
-
