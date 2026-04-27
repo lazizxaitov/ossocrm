@@ -664,8 +664,8 @@ export function CreateProductModal({ existingSizes, categories }: CreateProductM
 	              </p>
 	            ) : null}
 
-	            <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)]">
-	              <table className="w-full text-left text-xs">
+	            <div className="mt-3 max-h-[70vh] overflow-auto rounded-xl border border-[var(--border)]">
+	              <table className="min-w-[1100px] w-full text-left text-xs">
 	                <thead className="bg-[var(--surface-soft)] text-slate-600">
 	                  <tr>
 	                    <th className="px-2 py-2 font-medium">+</th>
