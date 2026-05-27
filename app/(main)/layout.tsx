@@ -8,7 +8,7 @@ export default async function MainAreaLayout({ children }: { children: React.Rea
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[linear-gradient(160deg,#f6f9ff_0%,#eef3fb_50%,#e7edf7_100%)] p-4 md:p-8">
-      <main className="mx-auto w-full min-w-0 max-w-6xl">
+      <main className="mx-auto w-full min-w-0 max-w-7xl 2xl:max-w-[1680px]">
         <MainNav role={session.role} name={session.name} alerts={alerts} />
         {children}
       </main>

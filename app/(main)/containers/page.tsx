@@ -77,22 +77,36 @@ export default async function ContainersPage() {
             </p>
           </div>
           {canManage ? (
-            <CreateContainerModal
-              defaultRate={latestCurrency?.cnyToUsdRate ?? null}
-              investors={investorsSorted}
-              products={products.map((product) => ({
-                id: product.id,
-                name: product.name,
-                sku: product.sku,
-                size: product.size,
-                imagePath: product.imagePath,
-                costPriceUSD: product.costPriceUSD,
-                cbm: product.cbm ?? 0,
-                kg: product.kg ?? 0,
-                basePriceUSD: product.basePriceUSD,
-                categoryName: product.category?.name ?? "Без категории",
-              }))}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <CreateContainerModal
+                defaultRate={latestCurrency?.cnyToUsdRate ?? null}
+                investors={investorsSorted}
+                products={products.map((product) => ({
+                  id: product.id,
+                  name: product.name,
+                  sku: product.sku,
+                  size: product.size,
+                  imagePath: product.imagePath,
+                  costPriceUSD: product.costPriceUSD,
+                  cbm: product.cbm ?? 0,
+                  kg: product.kg ?? 0,
+                  basePriceUSD: product.basePriceUSD,
+                  categoryName: product.category?.name ?? "Без категории",
+                }))}
+              />
+              <Link
+                href="/containers/excel"
+                className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Excel
+              </Link>
+              <Link
+                href="/containers/import"
+                className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Создать из Excel
+              </Link>
+            </div>
           ) : null}
         </div>
       </article>

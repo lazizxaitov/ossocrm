@@ -272,14 +272,23 @@ export async function buildDebtRows(now: Date = new Date()) {
 
 export async function buildMonthlyProfitChart() {
   const now = new Date();
-  const points: Array<{ label: string; value: number }> = [];
+  const points: Array<{ key: string; label: string; value: number }> = [];
+
+  // Use calendar months (not "30 days") to avoid duplicated months/labels around month boundaries.
   for (let i = 5; i >= 0; i--) {
-    const base = subDays(startOfMonth(now), i * 30);
-    const from = startOfMonth(base);
-    const to = endOfMonth(base);
+    const monthBase = new Date(now.getFullYear(), now.getMonth() - i, 1, 0, 0, 0, 0);
+    const from = startOfMonth(monthBase);
+    const to = endOfMonth(monthBase);
     const kpi = await computeKpis({ from, to });
-    points.push({ label: from.toLocaleDateString("ru-RU", { month: "short" }), value: kpi.netProfit });
+
+    const key = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}`;
+    points.push({
+      key,
+      label: from.toLocaleDateString("ru-RU", { month: "short" }),
+      value: kpi.netProfit,
+    });
   }
+
   return points;
 }
 

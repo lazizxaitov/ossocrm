@@ -156,10 +156,6 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
   const notificationsOpen = openMenu === "notifications";
   const mainMenuOpen = openMenu === "main";
   const settingsOpen = openMenu === "settings";
-  const criticalAlerts = alerts.filter((alert) => alert.level === "critical");
-  const tickerText = criticalAlerts.length
-    ? criticalAlerts.map((alert) => `ВАЖНО: ${alert.text}`).join(" • ")
-    : "Важных уведомлений нет";
 
   return (
     <header
@@ -212,12 +208,6 @@ export function MainNav({ role, name, alerts }: MainNavProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden h-10 w-[360px] items-center overflow-hidden rounded-lg border border-[var(--border)] bg-white px-2 md:flex">
-            <div className="osso-ticker-track flex flex-nowrap items-center gap-8 text-xs font-medium text-red-700">
-              <span className="shrink-0 whitespace-nowrap">{tickerText}</span>
-              <span aria-hidden="true" className="shrink-0 whitespace-nowrap">{tickerText}</span>
-            </div>
-          </div>
           <div className="relative">
             <button
               type="button"

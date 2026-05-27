@@ -14,7 +14,7 @@ export default async function WarehouseLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-[linear-gradient(165deg,#ebf4ff_0%,#f5f9ff_54%,#ffffff_100%)] p-3 md:p-8">
       <WarehousePwaRegister />
-      <main className="mx-auto max-w-5xl">
+      <main className="mx-auto w-full max-w-6xl 2xl:max-w-[1680px]">
         <header className="mb-4 flex flex-col gap-3 rounded-3xl border border-[#c9d6ea] bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)] md:mb-6 md:flex-row md:items-center md:justify-between">
           <div>
             <Image

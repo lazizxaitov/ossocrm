@@ -173,7 +173,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h3 className="mb-3 text-base font-semibold text-slate-900">Прибыль по месяцам</h3>
           <div className="space-y-2">
             {profitChart.map((point) => (
-              <div key={point.label} className="grid grid-cols-[48px_1fr_90px] items-center gap-2 text-sm">
+              <div key={point.key} className="grid grid-cols-[48px_1fr_90px] items-center gap-2 text-sm">
                 <span className="text-slate-600">{point.label}</span>
                 <div className="h-3 rounded bg-slate-100">
                   <div
@@ -225,7 +225,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     </section>
   );
 }
-
 
 
 

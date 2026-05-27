@@ -39,31 +39,6 @@ body {
   font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
 }
 
-@keyframes ossoTicker {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.osso-ticker-track {
-  width: max-content;
-  min-width: 200%;
-  animation: ossoTicker 24s linear infinite;
-  white-space: nowrap;
-}
-
-.osso-ticker-track-slow {
-  animation-duration: 30s;
-}
-
-.osso-ticker-row {
-  height: 16px;
-  overflow: hidden;
-}
-
 @keyframes ossoMarquee {
   0% {
     transform: translateX(0%);

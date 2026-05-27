@@ -34,10 +34,13 @@ yarn-error.log*
 .env*
 /prisma/dev.db
 
+# local backups/uploads
+/backups/*.db
+/public/uploads/
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
