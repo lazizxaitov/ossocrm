@@ -89,7 +89,17 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
               Каталог товаров с поиском, карточками и управлением параметрами.
             </p>
           </div>
-          {canManage ? <CreateProductModal existingSizes={existingSizes} categories={categories} /> : null}
+          {canManage ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <CreateProductModal existingSizes={existingSizes} categories={categories} />
+              <Link
+                href="/products/excel"
+                className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Создать через Excel
+              </Link>
+            </div>
+          ) : null}
         </div>
       </article>
 

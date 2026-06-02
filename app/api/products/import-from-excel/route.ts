@@ -13,6 +13,7 @@ type ImportRow = {
   sku: string;
   name: string;
   size: string;
+  description?: string | null;
   color?: string | null;
   costPriceUSD: number;
   cbm?: number | null;
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
       sku: String(row.sku ?? "").trim(),
       name: String(row.name ?? "").trim(),
       size: String(row.size ?? "").trim() || "Без размера",
+      description: String(row.description ?? "").trim() || null,
       color: String(row.color ?? "").trim() || null,
       costPriceUSD: Number(row.costPriceUSD),
       cbm: Number.isFinite(Number(row.cbm)) && Number(row.cbm) > 0 ? Number(row.cbm) : null,
@@ -145,6 +147,7 @@ export async function POST(request: Request) {
             data: {
               name: row.name,
               size: row.size,
+              description: row.description,
               color: row.color,
               costPriceUSD: row.costPriceUSD,
               cbm: row.cbm,
@@ -175,8 +178,8 @@ export async function POST(request: Request) {
             sku: row.sku,
             name: row.name,
             size: row.size,
+            description: row.description,
             color: row.color,
-            description: null,
             imagePath: newImagePath,
             costPriceUSD: row.costPriceUSD,
             cbm: row.cbm,
