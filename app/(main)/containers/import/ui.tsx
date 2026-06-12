@@ -59,6 +59,39 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
     return `Если в Excel нет курса, будет использован курс по умолчанию: ${Number(defaultRate).toFixed(4)}`;
   }, [canShowDefaultRate, defaultRate]);
 
+  const draftItemTotals = useMemo(() => {
+    if (!draft) return null;
+    return draft.items.reduce(
+      (acc, row) => {
+        acc.quantity += Number(row.quantity) || 0;
+        acc.totalUsd += Number(row.lineTotalUSD) || 0;
+        acc.totalCbm += Number(row.totalCbm) || 0;
+        acc.totalKg += (Number(row.kg) || 0) * (Number(row.quantity) || 0);
+        return acc;
+      },
+      { quantity: 0, totalUsd: 0, totalCbm: 0, totalKg: 0 },
+    );
+  }, [draft]);
+
+  const draftExpenseTotals = useMemo(() => {
+    if (!draft) return null;
+    return draft.expenses.reduce(
+      (acc, row) => {
+        const amount = Number(row.amountUSD) || 0;
+        acc.total += amount;
+        if (row.category === "CUSTOMS") acc.customs += amount;
+        if (row.category === "LOGISTICS" || row.category === "TRANSPORT") acc.road += amount;
+        return acc;
+      },
+      { total: 0, customs: 0, road: 0 },
+    );
+  }, [draft]);
+
+  const draftInvestmentTotals = useMemo(() => {
+    if (!draft) return null;
+    return draft.investments.reduce((sum, row) => sum + (Number(row.investedAmountUSD) || 0), 0);
+  }, [draft]);
+
   useEffect(() => {
     if (previewState.preview) {
       // Copy preview into editable draft.
@@ -428,9 +461,12 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
             if (e.target === e.currentTarget) setIsPreviewModalOpen(false);
           }}
         >
-          <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-lg">
+          <div className="w-full max-w-7xl overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-lg">
             <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
-              <div className="text-sm font-semibold text-slate-900">Предпросмотр импорта</div>
+              <div>
+                <div className="text-lg font-semibold tracking-[0.18em] text-slate-900">TRUCK ALL-1</div>
+                <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Import preview sheet</div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsPreviewModalOpen(false)}
@@ -479,7 +515,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
               ) : null}
 
               {draft ? (
-                <div className="grid gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-4">
+                <div className="grid gap-4 rounded-xl border border-[var(--border)] bg-white p-4">
                   <div className="grid gap-1 text-sm text-slate-800 md:grid-cols-2">
                     <div>
                       <span className="font-medium">Контейнер:</span> {draft.containerName}
@@ -497,28 +533,49 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                     </div>
                   </div>
 
+                  <div className="overflow-auto rounded-xl border border-slate-400">
+                    <div className="grid min-w-[980px] grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">USD</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL CBM</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL N.W. KGS</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">YO&#39;L GA</div>
+                      <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RASTAMOJKA</div>
+
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.quantity ?? 0}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draft.totalPurchaseUSD.toFixed(2)}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.totalCbm?.toFixed(4) ?? "0.0000"}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.totalKg?.toFixed(3) ?? "0.000"}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftExpenseTotals?.road?.toFixed(2) ?? "0.00"}</div>
+                      <div className="px-3 py-4 text-2xl font-semibold">{draftExpenseTotals?.customs?.toFixed(2) ?? "0.00"}</div>
+                    </div>
+                  </div>
+
                   <div className="grid gap-2">
-                    <div className="text-sm font-semibold text-slate-900">Товары ({draft.items.length})</div>
-                    <div className="max-h-[320px] overflow-auto rounded-lg border border-[var(--border)] bg-white">
-                      <table className="w-full border-separate border-spacing-0 text-left text-xs">
-                        <thead className="sticky top-0 bg-white text-slate-600">
+                    <div>
+                      <div className="text-lg font-semibold tracking-[0.18em] text-slate-900">GOODS</div>
+                      <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Товары ({draft.items.length})</div>
+                    </div>
+                    <div className="max-h-[340px] overflow-auto rounded-lg border border-slate-400 bg-white">
+                      <table className="w-full min-w-[1220px] border-separate border-spacing-0 text-left text-xs">
+                        <thead className="sticky top-0 bg-white text-slate-800">
                           <tr>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">SKU</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Название</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Кол-во</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Цена</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Сумма</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">CBM</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">KG</th>
-                            <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Действие</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">FACTORI NAME</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">OSSO NAME</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">QUANTITY</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">UNIT PRICE</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TOTAL CBM</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TOTAL N.W. KGS</th>
+                            <th className="border-b-2 border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">ACTION</th>
                           </tr>
                         </thead>
                         <tbody>
                           {draft.items.map((row, idx) => (
                             <tr key={`${row.productId}-${idx}`} className="text-slate-800">
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">{row.sku}</td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">{row.productName}</td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">
+                              <td className="border-b border-r border-slate-300 px-3 py-2">{row.sku}</td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">{row.productName}</td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
                                 {editItemIdx === idx ? (
                                   <input
                                     value={String(row.quantity)}
@@ -528,13 +585,13 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                       setDraft(next);
                                     }}
                                     inputMode="numeric"
-                                    className="w-20 rounded border border-[var(--border)] px-2 py-1 text-xs"
+                                    className="w-24 rounded border border-[var(--border)] px-2 py-1 text-xs"
                                   />
                                 ) : (
                                   row.quantity
                                 )}
                               </td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
                                 {editItemIdx === idx ? (
                                   <input
                                     value={row.unitPriceUSD === null ? "" : String(row.unitPriceUSD)}
@@ -545,7 +602,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                       setDraft(next);
                                     }}
                                     inputMode="decimal"
-                                    className="w-24 rounded border border-[var(--border)] px-2 py-1 text-xs"
+                                    className="w-28 rounded border border-[var(--border)] px-2 py-1 text-xs"
                                   />
                                 ) : row.unitPriceUSD !== null ? (
                                   row.unitPriceUSD.toFixed(2)
@@ -553,7 +610,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                   "—"
                                 )}
                               </td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
                                 {editItemIdx === idx ? (
                                   <input
                                     value={row.lineTotalUSD === null ? "" : String(row.lineTotalUSD)}
@@ -564,7 +621,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                       setDraft(next);
                                     }}
                                     inputMode="decimal"
-                                    className="w-24 rounded border border-[var(--border)] px-2 py-1 text-xs"
+                                    className="w-28 rounded border border-[var(--border)] px-2 py-1 text-xs"
                                   />
                                 ) : row.lineTotalUSD !== null ? (
                                   row.lineTotalUSD.toFixed(2)
@@ -572,13 +629,13 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                   "—"
                                 )}
                               </td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
                                 {row.totalCbm !== null ? row.totalCbm.toFixed(4) : "—"}
                               </td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">
-                                {row.kg !== null ? row.kg.toFixed(3) : "—"}
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
+                                {row.kg !== null ? ((row.kg || 0) * (row.quantity || 0)).toFixed(3) : "—"}
                               </td>
-                              <td className="border-b border-[var(--border)] px-2 py-1.5">
+                              <td className="border-b border-slate-300 px-3 py-2">
                                 <button
                                   type="button"
                                   onClick={() => setEditItemIdx((prev) => (prev === idx ? null : idx))}
@@ -596,25 +653,26 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
 
                   {draft.expenses.length ? (
                     <div className="grid gap-2">
-                      <div className="text-sm font-semibold text-slate-900">
-                        Расходы ({draft.expenses.length})
+                      <div>
+                        <div className="text-lg font-semibold tracking-[0.18em] text-slate-900">EXPENSES</div>
+                        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Расходы ({draft.expenses.length})</div>
                       </div>
-                      <div className="overflow-auto rounded-lg border border-[var(--border)] bg-white">
+                      <div className="overflow-auto rounded-lg border border-slate-400 bg-white">
                         <table className="w-full border-separate border-spacing-0 text-left text-xs">
-                          <thead className="bg-white text-slate-600">
+                          <thead className="bg-white text-slate-800">
                             <tr>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Название</th>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Категория</th>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">USD</th>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Действие</th>
+                              <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TITLE</th>
+                              <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">CATEGORY</th>
+                              <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">USD</th>
+                              <th className="border-b-2 border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">ACTION</th>
                             </tr>
                           </thead>
                           <tbody>
                             {draft.expenses.map((e, idx) => (
                               <tr key={idx} className="text-slate-800">
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">{e.title}</td>
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">{e.category}</td>
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">
+                                <td className="border-b border-r border-slate-300 px-3 py-2">{e.title}</td>
+                                <td className="border-b border-r border-slate-300 px-3 py-2">{e.category}</td>
+                                <td className="border-b border-r border-slate-300 px-3 py-2">
                                   {editExpenseIdx === idx ? (
                                     <input
                                       value={String(e.amountUSD)}
@@ -630,7 +688,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                     e.amountUSD.toFixed(2)
                                   )}
                                 </td>
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">
+                                <td className="border-b border-slate-300 px-3 py-2">
                                   <button
                                     type="button"
                                     onClick={() => setEditExpenseIdx((prev) => (prev === idx ? null : idx))}
@@ -649,17 +707,18 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
 
                   {draft.investments.length ? (
                     <div className="grid gap-2">
-                      <div className="text-sm font-semibold text-slate-900">
-                        Инвесторы ({draft.investments.length})
+                      <div>
+                        <div className="text-lg font-semibold tracking-[0.18em] text-slate-900">INVESTORS</div>
+                        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Инвесторы ({draft.investments.length})</div>
                       </div>
-                      <div className="overflow-auto rounded-lg border border-[var(--border)] bg-white">
+                      <div className="overflow-auto rounded-lg border border-slate-400 bg-white">
                         <table className="w-full border-separate border-spacing-0 text-left text-xs">
-                          <thead className="bg-white text-slate-600">
+                          <thead className="bg-white text-slate-800">
                             <tr>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Инвестор</th>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">USD</th>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">%</th>
-                              <th className="border-b border-[var(--border)] px-2 py-2 font-medium">Действие</th>
+                              <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">INVESTOR</th>
+                              <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">USD</th>
+                              <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">%</th>
+                              <th className="border-b-2 border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">ACTION</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -690,8 +749,8 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                               const isMissing = (previewState.missingInvestors ?? []).includes(inv.investorName);
                               return (
                               <tr key={idx} className="text-slate-800">
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">{inv.investorName}</td>
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">
+                                <td className="border-b border-r border-slate-300 px-3 py-2">{inv.investorName}</td>
+                                <td className="border-b border-r border-slate-300 px-3 py-2">
                                   {editInvestmentIdx === idx ? (
                                     <input
                                       value={inv.investedAmountUSD ? String(inv.investedAmountUSD) : ""}
@@ -709,7 +768,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                     </span>
                                   )}
                                 </td>
-                                <td className="border-b border-[var(--border)] px-2 py-1.5 text-slate-600">
+                                <td className="border-b border-r border-slate-300 px-3 py-2 text-slate-600">
                                   {editInvestmentIdx === idx ? (
                                     <input
                                       value={isManual ? String(inv.percentageShare) : ""}
@@ -736,7 +795,7 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                                     </span>
                                   )}
                                 </td>
-                                <td className="border-b border-[var(--border)] px-2 py-1.5">
+                                <td className="border-b border-slate-300 px-3 py-2">
                                   <button
                                     type="button"
                                     onClick={() => setEditInvestmentIdx((prev) => (prev === idx ? null : idx))}
@@ -752,6 +811,24 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                       </div>
                     </div>
                   ) : null}
+
+                  <div className="overflow-auto rounded-xl border border-slate-400">
+                    <div className="grid min-w-[980px] grid-cols-[1.2fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-base font-semibold uppercase tracking-[0.18em]">TOLANGAN SUMMA</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 font-semibold">Инвестиции</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 font-semibold">Расходы</div>
+                      <div className="border-b-2 border-slate-400 px-3 py-2 font-semibold">Остаток</div>
+
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">
+                        {((draft.totalPurchaseUSD || 0) + (draftExpenseTotals?.total || 0)).toFixed(2)}
+                      </div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{(draftInvestmentTotals || 0).toFixed(2)}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{(draftExpenseTotals?.total || 0).toFixed(2)}</div>
+                      <div className="px-3 py-4 text-2xl font-semibold">
+                        {((draftInvestmentTotals || 0) - ((draft.totalPurchaseUSD || 0) + (draftExpenseTotals?.total || 0))).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
