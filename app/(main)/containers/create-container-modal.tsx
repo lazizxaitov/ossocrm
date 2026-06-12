@@ -56,14 +56,18 @@ type ExcelDraftRow = {
   key: number;
   include: boolean;
   sku: string;
-  name: string;
+  factoryName: string;
+  localName: string;
   size: string;
-  color: string;
   quantity: string;
-  unitPriceUSD: string;
-  salePriceUSD: string;
+  priceCNY: string;
+  totalAmountCNY: string;
   cbm: string;
   kg: string;
+  totalCbm: string;
+  totalKg: string;
+  exchangeRate: string;
+  totalAmountUSD: string;
   imageFile: File | null;
 };
 
@@ -80,6 +84,21 @@ function recalcTotalCbm(row: ItemRow) {
     return String(Number((quantity * cbm).toFixed(4)));
   }
   return "";
+}
+
+function recalcDraftDerived(row: ExcelDraftRow) {
+  const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+  const priceCNY = toNumber(row.priceCNY);
+  const cbm = toNumber(row.cbm);
+  const kg = toNumber(row.kg);
+  const exchangeRate = toNumber(row.exchangeRate);
+
+  return {
+    totalAmountCNY: quantity > 0 && priceCNY > 0 ? String(Number((quantity * priceCNY).toFixed(2))) : "",
+    totalCbm: quantity > 0 && cbm > 0 ? String(Number((quantity * cbm).toFixed(4))) : "",
+    totalKg: quantity > 0 && kg > 0 ? String(Number((quantity * kg).toFixed(2))) : "",
+    totalAmountUSD: quantity > 0 && priceCNY > 0 && exchangeRate > 0 ? String(Number((quantity * priceCNY * exchangeRate).toFixed(2))) : "",
+  };
 }
 
 export function CreateContainerModal({ defaultRate, investors, products }: CreateContainerModalProps) {
@@ -176,6 +195,40 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   const expectedInvestmentsUsd = totalPurchaseUsd;
   const diff = investedTotal - expectedInvestmentsUsd;
   const hasMismatch = Math.abs(diff) >= 0.01;
+  const itemsTotalQty = useMemo(
+    () => containerItemsPayload.reduce((sum, row) => sum + Math.max(0, Math.floor(Number(row.quantity) || 0)), 0),
+    [containerItemsPayload],
+  );
+  const itemsTotalCbm = useMemo(
+    () => containerItemsPayload.reduce((sum, row) => sum + Math.max(0, Number(row.totalCbm ?? row.cbm ?? 0) || 0), 0),
+    [containerItemsPayload],
+  );
+  const itemsTotalKg = useMemo(
+    () =>
+      containerItemsPayload.reduce((sum, row) => {
+        const quantity = Math.max(0, Math.floor(Number(row.quantity) || 0));
+        const kg = Math.max(0, Number(row.kg ?? 0) || 0);
+        return sum + quantity * kg;
+      }, 0),
+    [containerItemsPayload],
+  );
+  const excelDraftTotals = useMemo(
+    () =>
+      excelDraftRows
+        .filter((row) => row.include)
+        .reduce(
+          (acc, row) => {
+            acc.qty += Math.max(0, Math.floor(toNumber(row.quantity)));
+            acc.cny += toNumber(row.totalAmountCNY);
+            acc.cbm += toNumber(row.totalCbm);
+            acc.kg += toNumber(row.totalKg);
+            acc.usd += toNumber(row.totalAmountUSD);
+            return acc;
+          },
+          { qty: 0, cny: 0, cbm: 0, kg: 0, usd: 0 },
+        ),
+    [excelDraftRows],
+  );
   const editingDetailsRow = editingDetailsForKey === null ? null : itemRows.find((row) => row.key === editingDetailsForKey) ?? null;
   const editingPriceRow = editingPriceForKey === null ? null : itemRows.find((row) => row.key === editingPriceForKey) ?? null;
 
@@ -284,7 +337,13 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   }
 
   function updateExcelDraftRow(key: number, patch: Partial<ExcelDraftRow>) {
-    setExcelDraftRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    setExcelDraftRows((prev) =>
+      prev.map((row) => {
+        if (row.key !== key) return row;
+        const next = { ...row, ...patch };
+        return { ...next, ...recalcDraftDerived(next) };
+      }),
+    );
   }
 
   function removeExcelDraftRow(key: number) {
@@ -359,12 +418,11 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
 
       type ParsedRow = {
         sku: string;
-        name: string;
+        factoryName: string;
+        localName: string;
         size: string;
-        color: string;
         quantity: number;
-        unitPriceUSD: number;
-        salePriceUSD: number;
+        priceCNY: number;
         cbm: number;
         kg: number;
         imageFile?: File | null;
@@ -386,27 +444,23 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
         }
         emptyStreak = 0;
 
-        const brand = normalizeText(cellValue(row.getCell(4).value));
-        const size = normalizeText(cellValue(row.getCell(8).value)) || "Без размера";
-        const color = normalizeText(cellValue(row.getCell(9).value));
-        const quantity = Math.max(0, Math.floor(toNumberSafe(row.getCell(10).value)));
-        const unitPriceUSD = toNumberSafe(row.getCell(7).value);
-        const salePriceUSD = toNumberSafe(row.getCell(43).value) || unitPriceUSD;
-        const cbm = toNumberSafe(row.getCell(12).value);
-        const kg = toNumberSafe(row.getCell(13).value);
-        const name = normalizeText(skuPrimary || skuFallback) || sku;
-        const decoratedName = brand ? `${brand} ${name}` : name;
+        const factoryName = normalizeText(cellValue(row.getCell(1).value)) || skuPrimary || skuFallback;
+        const localName = normalizeText(cellValue(row.getCell(2).value)) || skuPrimary || skuFallback || factoryName;
+        const size = normalizeText(cellValue(row.getCell(5).value) || cellValue(row.getCell(8).value)) || "Без размера";
+        const quantity = Math.max(0, Math.floor(toNumberSafe(row.getCell(7).value) || toNumberSafe(row.getCell(10).value)));
+        const priceCNY = toNumberSafe(row.getCell(4).value) || toNumberSafe(row.getCell(7).value);
+        const cbm = toNumberSafe(row.getCell(9).value) || toNumberSafe(row.getCell(12).value);
+        const kg = toNumberSafe(row.getCell(10).value) || toNumberSafe(row.getCell(13).value);
 
-        if (!quantity || !unitPriceUSD) continue;
+        if (!quantity || !priceCNY) continue;
 
         parsed.push({
           sku,
-          name: decoratedName,
+          factoryName,
+          localName,
           size,
-          color,
           quantity,
-          unitPriceUSD,
-          salePriceUSD,
+          priceCNY,
           cbm,
           kg,
           imageFile: imageByRow.get(r) ?? null,
@@ -420,20 +474,25 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
       const draft: ExcelDraftRow[] = [];
       let nextKey = excelDraftNextKey;
       for (const row of parsed) {
-        draft.push({
+        const draftRow: ExcelDraftRow = {
           key: nextKey,
           include: true,
           sku: row.sku,
-          name: row.name,
+          factoryName: row.factoryName,
+          localName: row.localName,
           size: row.size,
-          color: row.color,
           quantity: String(row.quantity),
-          unitPriceUSD: row.unitPriceUSD > 0 ? String(row.unitPriceUSD) : "",
-          salePriceUSD: row.salePriceUSD > 0 ? String(row.salePriceUSD) : "",
+          priceCNY: row.priceCNY > 0 ? String(row.priceCNY) : "",
+          totalAmountCNY: "",
           cbm: row.cbm > 0 ? String(row.cbm) : "",
           kg: row.kg > 0 ? String(row.kg) : "",
+          totalCbm: "",
+          totalKg: "",
+          exchangeRate: rate || "",
+          totalAmountUSD: "",
           imageFile: row.imageFile ?? null,
-        });
+        };
+        draft.push({ ...draftRow, ...recalcDraftDerived(draftRow) });
         nextKey += 1;
       }
 
@@ -456,20 +515,22 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
         .filter((row) => row.include)
         .map((row) => ({
           sku: row.sku.trim(),
-          name: row.name.trim(),
+          factoryName: row.factoryName.trim(),
+          localName: row.localName.trim(),
           size: row.size.trim() || "Без размера",
-          color: row.color.trim(),
           quantity: Math.floor(toNumber(row.quantity)),
-          unitPriceUSD: toNumber(row.unitPriceUSD),
-          salePriceUSD: toNumber(row.salePriceUSD),
+          priceCNY: toNumber(row.priceCNY),
+          exchangeRate: toNumber(row.exchangeRate),
+          unitPriceUSD: toNumber(row.priceCNY) * toNumber(row.exchangeRate),
+          salePriceUSD: toNumber(row.priceCNY) * toNumber(row.exchangeRate),
           cbm: toNumber(row.cbm),
           kg: toNumber(row.kg),
           imageFile: row.imageFile,
         }))
-        .filter((row) => row.sku && row.name && row.quantity > 0 && row.unitPriceUSD > 0);
+        .filter((row) => row.sku && row.localName && row.quantity > 0 && row.unitPriceUSD > 0);
 
       if (cleaned.length === 0) {
-        throw new Error("Нет товаров для импорта (проверьте SKU/название/кол-во/цену).");
+        throw new Error("Нет товаров для импорта (проверьте SKU/название/кол-во/цену в юанях и курс).");
       }
 
       const form = new FormData();
@@ -480,9 +541,9 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
         }
         return {
           sku: row.sku,
-          name: row.name,
+          name: row.localName,
           size: row.size,
-          color: row.color || null,
+          color: null,
           costPriceUSD: row.unitPriceUSD,
           cbm: row.cbm > 0 ? row.cbm : null,
           kg: row.kg > 0 ? row.kg : null,
@@ -555,7 +616,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
             key,
             productId: product.id,
             sizeLabel: row.size,
-            color: row.color,
+            color: "",
             quantity: String(row.quantity),
             unitPriceUSD: row.unitPriceUSD > 0 ? String(row.unitPriceUSD) : "",
             salePriceUSD: row.salePriceUSD > 0 ? String(row.salePriceUSD) : "",
@@ -818,14 +879,14 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
       {excelPreviewOpen ? (
         <div className="fixed inset-0 z-[70] bg-slate-900/50 p-4" onClick={requestCloseExcelPreview}>
           <div
-            className="mx-auto flex max-h-[95vh] w-full max-w-6xl flex-col overflow-auto rounded-2xl bg-white p-4 shadow-xl"
+            className="mx-auto flex max-h-[95vh] w-full max-w-[96vw] flex-col overflow-auto rounded-2xl bg-white p-4 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h4 className="text-base font-semibold text-slate-900">Импорт товаров из Excel</h4>
                 <p className="mt-1 text-xs text-slate-500">
-                  Проверьте список, измените данные или удалите строки перед добавлением в контейнер.
+                  Проверьте сетку как в Excel. Можно менять значения до добавления в контейнер.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -854,133 +915,171 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
               </p>
             ) : null}
 
-            <div className="mt-3 overflow-hidden rounded-xl border border-[var(--border)]">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[var(--surface-soft)] text-slate-600">
-                  <tr>
-                    <th className="px-2 py-2 font-medium">+</th>
-                    <th className="px-2 py-2 font-medium">SKU</th>
-                    <th className="px-2 py-2 font-medium">Название</th>
-                    <th className="px-2 py-2 font-medium">Размер</th>
-                    <th className="px-2 py-2 font-medium">Цвет</th>
-                    <th className="px-2 py-2 font-medium">QTY</th>
-                    <th className="px-2 py-2 font-medium">Цена</th>
-                    <th className="px-2 py-2 font-medium">Продажа</th>
-                    <th className="px-2 py-2 font-medium">CBM</th>
-                    <th className="px-2 py-2 font-medium">KG</th>
-                    <th className="px-2 py-2 font-medium">Фото</th>
-                    <th className="px-2 py-2 font-medium">Удалить</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {excelDraftRows.map((row) => (
-                    <tr key={row.key} className="border-t border-[var(--border)] align-top">
-                      <td className="px-2 py-2">
-                        <input
-                          type="checkbox"
-                          checked={row.include}
-                          onChange={(e) => updateExcelDraftRow(row.key, { include: e.target.checked })}
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.sku}
-                          onChange={(e) => updateExcelDraftRow(row.key, { sku: e.target.value })}
-                          className="w-28 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.name}
-                          onChange={(e) => updateExcelDraftRow(row.key, { name: e.target.value })}
-                          className="w-64 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.size}
-                          onChange={(e) => updateExcelDraftRow(row.key, { size: e.target.value })}
-                          className="w-32 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.color}
-                          onChange={(e) => updateExcelDraftRow(row.key, { color: e.target.value })}
-                          className="w-32 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.quantity}
-                          onChange={(e) => updateExcelDraftRow(row.key, { quantity: e.target.value })}
-                          type="number"
-                          min={0}
-                          step={1}
-                          className="w-20 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.unitPriceUSD}
-                          onChange={(e) => updateExcelDraftRow(row.key, { unitPriceUSD: e.target.value })}
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.salePriceUSD}
-                          onChange={(e) => updateExcelDraftRow(row.key, { salePriceUSD: e.target.value })}
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.cbm}
-                          onChange={(e) => updateExcelDraftRow(row.key, { cbm: e.target.value })}
-                          type="number"
-                          min={0}
-                          step="0.0001"
-                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2">
-                        <input
-                          value={row.kg}
-                          onChange={(e) => updateExcelDraftRow(row.key, { kg: e.target.value })}
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-24 rounded border border-[var(--border)] px-2 py-1"
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-slate-700">{row.imageFile ? "есть" : "—"}</td>
-                      <td className="px-2 py-2">
-                        <button
-                          type="button"
-                          onClick={() => removeExcelDraftRow(row.key)}
-                          className="rounded border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
-                        >
-                          X
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {!excelDraftRows.length ? (
+            <div className="mt-3 grid gap-3">
+              <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                <div className="grid grid-cols-5 bg-slate-50 text-[11px] uppercase tracking-[0.18em] text-slate-600">
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Sets</div>
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">RMB</div>
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">USD</div>
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Total CBM</div>
+                  <div className="border-b-2 border-slate-300 px-3 py-2 font-semibold">Total N.W. Kgs</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{excelDraftTotals.qty}</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{excelDraftTotals.cny.toFixed(2)}</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{excelDraftTotals.usd.toFixed(2)}</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{excelDraftTotals.cbm.toFixed(4)}</div>
+                  <div className="px-3 py-2 text-base font-semibold text-slate-900">{excelDraftTotals.kg.toFixed(2)}</div>
+                </div>
+              </div>
+
+              <div className="min-h-0 overflow-auto rounded-xl border border-slate-300">
+                <table className="min-w-[1800px] text-left text-xs">
+                  <thead className="bg-[var(--surface-soft)] text-slate-700">
                     <tr>
-                      <td className="px-3 py-6 text-center text-slate-500" colSpan={12}>
-                        Нет строк для импорта.
-                      </td>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">+</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Название в заводе</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Название у нас</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Фото</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Цена в юанях</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Размер</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Количество</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Общая сумма в юанях</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">CBM</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">KG</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Total CBM</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Net worth Kgs</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Yuan to USD</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Total amount</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">SKU</th>
+                      <th className="border-b-2 border-slate-300 px-2 py-2 font-semibold">Удалить</th>
                     </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {excelDraftRows.map((row) => (
+                      <tr key={row.key} className="align-top">
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            type="checkbox"
+                            checked={row.include}
+                            onChange={(e) => updateExcelDraftRow(row.key, { include: e.target.checked })}
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.factoryName}
+                            onChange={(e) => updateExcelDraftRow(row.key, { factoryName: e.target.value })}
+                            className="w-56 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.localName}
+                            onChange={(e) => updateExcelDraftRow(row.key, { localName: e.target.value })}
+                            className="w-56 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2 text-slate-700">{row.imageFile ? "Есть фото" : "—"}</td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.priceCNY}
+                            onChange={(e) => updateExcelDraftRow(row.key, { priceCNY: e.target.value })}
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="w-28 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.size}
+                            onChange={(e) => updateExcelDraftRow(row.key, { size: e.target.value })}
+                            className="w-28 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.quantity}
+                            onChange={(e) => updateExcelDraftRow(row.key, { quantity: e.target.value })}
+                            type="number"
+                            min={0}
+                            step={1}
+                            className="w-20 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalAmountCNY || "0"}</td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.cbm}
+                            onChange={(e) => updateExcelDraftRow(row.key, { cbm: e.target.value })}
+                            type="number"
+                            min={0}
+                            step="0.0001"
+                            className="w-24 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.kg}
+                            onChange={(e) => updateExcelDraftRow(row.key, { kg: e.target.value })}
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="w-24 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalCbm || "0"}</td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalKg || "0"}</td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.exchangeRate}
+                            onChange={(e) => updateExcelDraftRow(row.key, { exchangeRate: e.target.value })}
+                            type="number"
+                            min={0}
+                            step="0.0001"
+                            className="w-24 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalAmountUSD || "0"}</td>
+                        <td className="border-t border-r border-slate-200 px-2 py-2">
+                          <input
+                            value={row.sku}
+                            onChange={(e) => updateExcelDraftRow(row.key, { sku: e.target.value })}
+                            className="w-32 rounded border border-[var(--border)] px-2 py-1"
+                          />
+                        </td>
+                        <td className="border-t border-slate-200 px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={() => removeExcelDraftRow(row.key)}
+                            className="rounded border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                          >
+                            X
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {!excelDraftRows.length ? (
+                      <tr>
+                        <td className="px-3 py-6 text-center text-slate-500" colSpan={16}>
+                          Нет строк для импорта.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                <div className="grid grid-cols-4 bg-slate-50 text-[11px] tracking-[0.16em] text-slate-700">
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 text-base font-semibold uppercase">TOLANGAN SUMMA</div>
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Инвестиции</div>
+                  <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Курс</div>
+                  <div className="border-b-2 border-slate-300 px-3 py-2 font-semibold">Остаток</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{excelDraftTotals.usd.toFixed(2)}</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{investedTotal.toFixed(2)}</div>
+                  <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{Number(rate || 0).toFixed(4)}</div>
+                  <div className="px-3 py-2 text-base font-semibold text-slate-900">{(investedTotal - excelDraftTotals.usd).toFixed(2)}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1271,14 +1370,31 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-3">
-              <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                <p>
-                  Сумма товаров: <span className="font-semibold text-slate-900">${itemsPurchaseUsd.toFixed(2)}</span>
-                </p>
-                <p>
-                  Общая сумма контейнера:{" "}
-                  <span className="font-semibold text-slate-900">${totalPurchaseUsd.toFixed(2)}</span>
-                </p>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+                <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                  <div className="grid grid-cols-4 bg-slate-50 text-[11px] uppercase tracking-[0.16em] text-slate-600">
+                    <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Sets</div>
+                    <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">USD</div>
+                    <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Total CBM</div>
+                    <div className="border-b-2 border-slate-300 px-3 py-2 font-semibold">Total N.W. Kgs</div>
+                    <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{itemsTotalQty}</div>
+                    <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{itemsPurchaseUsd.toFixed(2)}</div>
+                    <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{itemsTotalCbm.toFixed(4)}</div>
+                    <div className="px-3 py-2 text-base font-semibold text-slate-900">{itemsTotalKg.toFixed(2)}</div>
+                  </div>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                  <div className="grid grid-cols-4 bg-slate-50 text-[11px] tracking-[0.16em] text-slate-700">
+                    <div className="border-b-2 border-r border-slate-300 px-3 py-2 text-base font-semibold uppercase">TOLANGAN SUMMA</div>
+                    <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Инвестиции</div>
+                    <div className="border-b-2 border-r border-slate-300 px-3 py-2 font-semibold">Курс</div>
+                    <div className="border-b-2 border-slate-300 px-3 py-2 font-semibold">Остаток</div>
+                    <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{totalPurchaseUsd.toFixed(2)}</div>
+                    <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{investedTotal.toFixed(2)}</div>
+                    <div className="border-r border-slate-300 px-3 py-2 text-base font-semibold text-slate-900">{Number(rate || 0).toFixed(4)}</div>
+                    <div className="px-3 py-2 text-base font-semibold text-slate-900">{diff.toFixed(2)}</div>
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
