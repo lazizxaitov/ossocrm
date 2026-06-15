@@ -6,7 +6,6 @@ import { createContainerAction, type CreateContainerFormState } from "@/app/(mai
 import { CustomConfirmDialog } from "@/components/custom-confirm-dialog";
 import { CustomDateInput } from "@/components/custom-date-input";
 import { CustomSelect } from "@/components/custom-select";
-import { ResizableHeaderCell, type ResizableColumn, useResizableColumns } from "@/components/ui/use-resizable-columns";
 
 type InvestorOption = {
   id: string;
@@ -72,45 +71,10 @@ type ExcelDraftRow = {
   imageFile: File | null;
 };
 
-const EXCEL_DRAFT_COLUMNS: ResizableColumn[] = [
-  { id: "include", label: "+", defaultWidth: 60 },
-  { id: "factoryName", label: "FACTORI NAME", defaultWidth: 220 },
-  { id: "localName", label: "OSSO NAME", defaultWidth: 240 },
-  { id: "picture", label: "PICTURE / 图片", defaultWidth: 140 },
-  { id: "priceCNY", label: "UNIT PRICE", defaultWidth: 130 },
-  { id: "size", label: "SAIZE", defaultWidth: 160 },
-  { id: "quantity", label: "QUANTITY ( SET )", defaultWidth: 130 },
-  { id: "totalAmountCNY", label: "TOTAL AMOUNT", defaultWidth: 150 },
-  { id: "cbm", label: "CBM", defaultWidth: 120 },
-  { id: "kg", label: "KG", defaultWidth: 120 },
-  { id: "totalCbm", label: "TOTAL CBM", defaultWidth: 140 },
-  { id: "totalKg", label: "TOTAL N.W. KGS", defaultWidth: 150 },
-  { id: "dalee", label: "DALEE", defaultWidth: 110 },
-  { id: "yusd", label: "Y - $", defaultWidth: 120 },
-  { id: "totalAmountUsd", label: "TOTAL AMOUNT", defaultWidth: 150 },
-  { id: "avgUnit", label: "ortacha birlik", defaultWidth: 140 },
-  { id: "expenseUnit", label: "YOLGA VA Rastamojka ortacha birligi", defaultWidth: 220 },
-  { id: "birDonasi", label: "BIR DONASI", defaultWidth: 140 },
-  { id: "jami", label: "JAMI", defaultWidth: 150 },
-  { id: "transportga", label: "TRANSPORTGA", defaultWidth: 140 },
-  { id: "transportTotal", label: "TOTAL AMOUNT TRANSPORTGA", defaultWidth: 190 },
-  { id: "customsUnit", label: "RASTAMOJKAGA", defaultWidth: 140 },
-  { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA", defaultWidth: 210 },
-  { id: "totalAmount2", label: "TOTAL AMOUNT", defaultWidth: 160 },
-  { id: "allContainers", label: "TOTAL AMOUNT ALL CONTEYNERS", defaultWidth: 230 },
-  { id: "sku", label: "SKU", defaultWidth: 150 },
-  { id: "delete", label: "Удалить", defaultWidth: 100 },
-];
-
 function toNumber(value: string) {
   const normalized = String(value ?? "").trim().replace(",", ".");
   const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
-}
-
-function estimateColumnWidth(values: unknown[], min = 100, max = 420) {
-  const longest = values.reduce<number>((best, value) => Math.max(best, String(value ?? "").length), 0);
-  return Math.min(max, Math.max(min, longest * 9 + 36));
 }
 
 function recalcTotalCbm(row: ItemRow) {
@@ -153,16 +117,6 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   const [excelPreviewCloseConfirmOpen, setExcelPreviewCloseConfirmOpen] = useState(false);
   const [excelDraftRows, setExcelDraftRows] = useState<ExcelDraftRow[]>([]);
   const [excelDraftNextKey, setExcelDraftNextKey] = useState(1);
-  const {
-    getWidth: getDraftWidth,
-    totalWidth: draftTableWidth,
-    startResize: startDraftResize,
-    setColumnWidth: setDraftWidth,
-    resetWidths: resetDraftWidths,
-  } = useResizableColumns(
-    "osso:create-container-draft-columns:v1",
-    EXCEL_DRAFT_COLUMNS,
-  );
 
   const [investorNextKey, setInvestorNextKey] = useState(2);
   const [investorRows, setInvestorRows] = useState<InvestorRow[]>([{ key: 1, investorId: "", investedAmountUSD: "", percentageShare: "" }]);
@@ -179,74 +133,6 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
   const purchaseCnyNumber = Number(purchaseCny || 0);
   const rateNumber = Number(rate || 0);
   const purchaseUsdFromCurrency = purchaseCnyNumber * rateNumber;
-
-  function autoSizeDraftColumn(columnId: string) {
-    const values = excelDraftRows.map((row) => {
-      const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-      const totalAmountUsd = toNumber(row.totalAmountUSD);
-      const shareRatio = excelDraftTotals.usd > 0 ? totalAmountUsd / excelDraftTotals.usd : 0;
-      const avgUnitUsd = quantity > 0 ? totalAmountUsd / quantity : 0;
-      const expenseAllocated = shareRatio * Math.max(0, investedTotal - excelDraftTotals.usd);
-      const finalUnitCost = quantity > 0 ? (totalAmountUsd + expenseAllocated) / quantity : 0;
-      const jami = totalAmountUsd + expenseAllocated;
-      switch (columnId) {
-        case "include":
-          return "+";
-        case "factoryName":
-          return row.factoryName;
-        case "localName":
-          return row.localName;
-        case "picture":
-          return row.imageFile ? row.imageFile.name : "";
-        case "priceCNY":
-          return row.priceCNY;
-        case "size":
-          return row.size;
-        case "quantity":
-          return row.quantity;
-        case "totalAmountCNY":
-          return row.totalAmountCNY;
-        case "cbm":
-          return row.cbm;
-        case "kg":
-          return row.kg;
-        case "totalCbm":
-          return row.totalCbm;
-        case "totalKg":
-          return row.totalKg;
-        case "dalee":
-          return "DALEE";
-        case "yusd":
-          return avgUnitUsd.toFixed(6);
-        case "totalAmountUsd":
-          return row.totalAmountUSD;
-        case "avgUnit":
-          return shareRatio.toFixed(6);
-        case "expenseUnit":
-          return expenseAllocated.toFixed(6);
-        case "birDonasi":
-          return finalUnitCost.toFixed(6);
-        case "jami":
-          return jami.toFixed(6);
-        case "transportga":
-        case "transportTotal":
-        case "customsUnit":
-        case "customsTotal":
-          return "—";
-        case "totalAmount2":
-        case "allContainers":
-          return totalAmountUsd.toFixed(6);
-        case "sku":
-          return row.sku;
-        case "delete":
-          return "Удалить";
-        default:
-          return "";
-      }
-    });
-    const label = EXCEL_DRAFT_COLUMNS.find((column) => column.id === columnId)?.label ?? columnId;
-    setDraftWidth(columnId, estimateColumnWidth([label, ...values]));
-  }
   const investmentsPayload = useMemo(
     () =>
       investorRows
@@ -1006,14 +892,6 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={resetDraftWidths}
-                  disabled={importPending}
-                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Сбросить ширины
-                </button>
-                <button
-                  type="button"
                   onClick={requestCloseExcelPreview}
                   disabled={importPending}
                   className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -1054,36 +932,29 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
               </div>
 
               <div className="min-h-0 overflow-auto rounded-xl border border-slate-300">
-                <table className="text-left text-xs" style={{ minWidth: draftTableWidth }}>
-                  <colgroup>
-                    {EXCEL_DRAFT_COLUMNS.map((column) => (
-                      <col key={column.id} style={{ width: getDraftWidth(column.id) }} />
-                    ))}
-                  </colgroup>
+                <table className="min-w-[1800px] text-left text-xs">
                   <thead className="bg-[var(--surface-soft)] text-slate-700">
                     <tr>
-                      {EXCEL_DRAFT_COLUMNS.map((column) => (
-                        <ResizableHeaderCell
-                          key={column.id}
-                          label={column.label}
-                          width={getDraftWidth(column.id)}
-                          onResizeStart={(event) => startDraftResize(column.id, event)}
-                          onAutoSize={() => autoSizeDraftColumn(column.id)}
-                          className="px-2 py-2 text-xs"
-                        />
-                      ))}
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">+</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Название в заводе</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Название у нас</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Фото</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Цена в юанях</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Размер</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Количество</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Общая сумма в юанях</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">CBM</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">KG</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Total CBM</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Net worth Kgs</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Yuan to USD</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">Total amount</th>
+                      <th className="border-b-2 border-r border-slate-300 px-2 py-2 font-semibold">SKU</th>
+                      <th className="border-b-2 border-slate-300 px-2 py-2 font-semibold">Удалить</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {excelDraftRows.map((row) => {
-                      const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-                      const totalAmountUsd = toNumber(row.totalAmountUSD);
-                      const shareRatio = excelDraftTotals.usd > 0 ? totalAmountUsd / excelDraftTotals.usd : 0;
-                      const avgUnitUsd = quantity > 0 ? totalAmountUsd / quantity : 0;
-                      const expenseAllocated = shareRatio * Math.max(0, investedTotal - excelDraftTotals.usd);
-                      const finalUnitCost = quantity > 0 ? (totalAmountUsd + expenseAllocated) / quantity : 0;
-                      const jami = totalAmountUsd + expenseAllocated;
-                      return (
+                    {excelDraftRows.map((row) => (
                       <tr key={row.key} className="align-top">
                         <td className="border-t border-r border-slate-200 px-2 py-2">
                           <input
@@ -1096,14 +967,14 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           <input
                             value={row.factoryName}
                             onChange={(e) => updateExcelDraftRow(row.key, { factoryName: e.target.value })}
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-56 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2">
                           <input
                             value={row.localName}
                             onChange={(e) => updateExcelDraftRow(row.key, { localName: e.target.value })}
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-56 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2 text-slate-700">{row.imageFile ? "Есть фото" : "—"}</td>
@@ -1114,18 +985,15 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                             type="number"
                             min={0}
                             step="0.01"
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-28 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2">
                           <input
                             value={row.size}
                             onChange={(e) => updateExcelDraftRow(row.key, { size: e.target.value })}
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-28 rounded border border-[var(--border)] px-2 py-1"
                           />
-                        </td>
-                        <td className="border-t border-r border-slate-200 px-2 py-2">
-                          <div className="w-full bg-slate-50 px-2 py-1 text-center text-[11px] text-slate-700">—</div>
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2">
                           <input
@@ -1134,7 +1002,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                             type="number"
                             min={0}
                             step={1}
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-20 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalAmountCNY || "0"}</td>
@@ -1145,7 +1013,7 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                             type="number"
                             min={0}
                             step="0.0001"
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-24 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2">
@@ -1155,13 +1023,11 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                             type="number"
                             min={0}
                             step="0.01"
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-24 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalCbm || "0"}</td>
                         <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalKg || "0"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">DALEE</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{avgUnitUsd ? avgUnitUsd.toFixed(6) : "—"}</td>
                         <td className="border-t border-r border-slate-200 px-2 py-2">
                           <input
                             value={row.exchangeRate}
@@ -1169,25 +1035,15 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                             type="number"
                             min={0}
                             step="0.0001"
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-24 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-r border-slate-200 px-2 py-2 text-sm font-semibold text-slate-900">{row.totalAmountUSD || "0"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{shareRatio ? shareRatio.toFixed(6) : "—"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{expenseAllocated ? expenseAllocated.toFixed(6) : "—"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{finalUnitCost ? finalUnitCost.toFixed(6) : "—"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{jami ? jami.toFixed(6) : "—"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">—</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">—</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">—</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">—</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{totalAmountUsd ? totalAmountUsd.toFixed(6) : "—"}</td>
-                        <td className="border-t border-r border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700">{totalAmountUsd ? totalAmountUsd.toFixed(6) : "—"}</td>
                         <td className="border-t border-r border-slate-200 px-2 py-2">
                           <input
                             value={row.sku}
                             onChange={(e) => updateExcelDraftRow(row.key, { sku: e.target.value })}
-                            className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-1"
+                            className="w-32 rounded border border-[var(--border)] px-2 py-1"
                           />
                         </td>
                         <td className="border-t border-slate-200 px-2 py-2">
@@ -1200,11 +1056,10 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           </button>
                         </td>
                       </tr>
-                      );
-                    })}
+                    ))}
                     {!excelDraftRows.length ? (
                       <tr>
-                        <td className="px-3 py-6 text-center text-slate-500" colSpan={EXCEL_DRAFT_COLUMNS.length}>
+                        <td className="px-3 py-6 text-center text-slate-500" colSpan={16}>
                           Нет строк для импорта.
                         </td>
                       </tr>
@@ -1393,6 +1248,14 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                           <input
                             value={editingDetailsRow.sizeLabel ?? ""}
                             onChange={(event) => updateItemRow(editingDetailsRow.key, { sizeLabel: event.target.value })}
+                            className="rounded border border-[var(--border)] px-2 py-2 text-sm text-slate-700"
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs text-slate-600">
+                          Цвет
+                          <input
+                            value={editingDetailsRow.color ?? ""}
+                            onChange={(event) => updateItemRow(editingDetailsRow.key, { color: event.target.value })}
                             className="rounded border border-[var(--border)] px-2 py-2 text-sm text-slate-700"
                           />
                         </label>

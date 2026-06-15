@@ -11,40 +11,6 @@ import {
   type QuickCreateProductsFormState,
   type QuickCreateInvestorsFormState,
 } from "@/app/(main)/containers/actions";
-import { ResizableHeaderCell, type ResizableColumn, useResizableColumns } from "@/components/ui/use-resizable-columns";
-
-const IMPORT_PREVIEW_COLUMNS: ResizableColumn[] = [
-  { id: "factoryName", label: "FACTORI NAME", defaultWidth: 220 },
-  { id: "localName", label: "OSSO NAME", defaultWidth: 240 },
-  { id: "picture", label: "PICTURE / 图片", defaultWidth: 140 },
-  { id: "unitPrice", label: "UNIT PRICE", defaultWidth: 130 },
-  { id: "size", label: "SAIZE", defaultWidth: 160 },
-  { id: "quantity", label: "QUANTITY ( SET )", defaultWidth: 130 },
-  { id: "totalAmount", label: "TOTAL AMOUNT", defaultWidth: 150 },
-  { id: "cbm", label: "CBM", defaultWidth: 120 },
-  { id: "kg", label: "KG", defaultWidth: 120 },
-  { id: "totalCbm", label: "TOTAL CBM", defaultWidth: 140 },
-  { id: "totalKg", label: "TOTAL N.W. KGS", defaultWidth: 150 },
-  { id: "dalee", label: "DALEE", defaultWidth: 110 },
-  { id: "yusd", label: "Y - $", defaultWidth: 120 },
-  { id: "totalAmountUsd", label: "TOTAL AMOUNT", defaultWidth: 150 },
-  { id: "avgUnit", label: "ortacha birlik", defaultWidth: 140 },
-  { id: "expenseUnit", label: "YOLGA VA Rastamojka ortacha birligi", defaultWidth: 220 },
-  { id: "birDonasi", label: "BIR DONASI", defaultWidth: 140 },
-  { id: "jami", label: "JAMI", defaultWidth: 150 },
-  { id: "transportga", label: "TRANSPORTGA", defaultWidth: 140 },
-  { id: "transportTotal", label: "TOTAL AMOUNT TRANSPORTGA", defaultWidth: 190 },
-  { id: "customsUnit", label: "RASTAMOJKAGA", defaultWidth: 140 },
-  { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA", defaultWidth: 210 },
-  { id: "totalAmount2", label: "TOTAL AMOUNT", defaultWidth: 160 },
-  { id: "allContainers", label: "TOTAL AMOUNT ALL CONTEYNERS", defaultWidth: 230 },
-  { id: "actions", label: "ACTION", defaultWidth: 110 },
-];
-
-function estimateColumnWidth(values: unknown[], min = 100, max = 420) {
-  const longest = values.reduce<number>((best, value) => Math.max(best, String(value ?? "").length), 0);
-  return Math.min(max, Math.max(min, longest * 9 + 36));
-}
 
 export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: number | null }) {
   const initialState: ImportContainerFormState = { error: null, success: false, warnings: [], containerId: null, unknownSkus: [] };
@@ -86,16 +52,6 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
   const [missingProductsDraft, setMissingProductsDraft] = useState<Array<{ sku: string; name: string; basePriceUSD: string }>>([]);
   const [showAddInvestors, setShowAddInvestors] = useState(false);
   const [missingInvestorsDraft, setMissingInvestorsDraft] = useState<Array<{ name: string }>>([]);
-  const {
-    getWidth: getPreviewWidth,
-    totalWidth: previewTableWidth,
-    startResize: startPreviewResize,
-    setColumnWidth: setPreviewWidth,
-    resetWidths: resetPreviewWidths,
-  } = useResizableColumns(
-    "osso:containers-import-preview-columns:v1",
-    IMPORT_PREVIEW_COLUMNS,
-  );
 
   const canShowDefaultRate = defaultRate && Number.isFinite(defaultRate);
   const hint = useMemo(() => {
@@ -135,72 +91,6 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
     if (!draft) return null;
     return draft.investments.reduce((sum, row) => sum + (Number(row.investedAmountUSD) || 0), 0);
   }, [draft]);
-
-  function autoSizePreviewColumn(columnId: string) {
-    if (!draft) return;
-    const values = draft.items.map((row) => {
-      const totalUsd = row.lineTotalUSD ?? 0;
-      const quantity = row.quantity || 0;
-      const roadAllocated = (draft.totalPurchaseUSD || 0) > 0 ? ((draftExpenseTotals?.road || 0) * totalUsd) / (draft.totalPurchaseUSD || 1) : 0;
-      const customsAllocated = (draft.totalPurchaseUSD || 0) > 0 ? ((draftExpenseTotals?.customs || 0) * totalUsd) / (draft.totalPurchaseUSD || 1) : 0;
-      const totalAllocated = roadAllocated + customsAllocated;
-      const shareRatio = (draft.totalPurchaseUSD || 0) > 0 ? totalUsd / (draft.totalPurchaseUSD || 1) : 0;
-      switch (columnId) {
-        case "factoryName":
-          return row.sku;
-        case "localName":
-          return row.productName;
-        case "picture":
-          return "";
-        case "unitPrice":
-          return row.unitPriceUSD ?? "";
-        case "size":
-          return row.sizeLabel ?? "";
-        case "quantity":
-          return row.quantity;
-        case "totalAmount":
-        case "totalAmountUsd":
-          return totalUsd.toFixed(6);
-        case "cbm":
-          return row.cbm ?? "";
-        case "kg":
-          return row.kg ?? "";
-        case "totalCbm":
-          return row.totalCbm ?? "";
-        case "totalKg":
-          return ((row.kg || 0) * (row.quantity || 0)).toFixed(3);
-        case "dalee":
-          return "DALEE";
-        case "yusd":
-          return (quantity > 0 ? totalUsd / quantity : 0).toFixed(6);
-        case "avgUnit":
-          return shareRatio.toFixed(6);
-        case "expenseUnit":
-          return totalAllocated.toFixed(6);
-        case "birDonasi":
-          return (quantity > 0 ? (totalUsd + totalAllocated) / quantity : 0).toFixed(6);
-        case "jami":
-          return (totalUsd + totalAllocated).toFixed(6);
-        case "transportga":
-          return (quantity > 0 ? roadAllocated / quantity : 0).toFixed(6);
-        case "transportTotal":
-          return roadAllocated.toFixed(6);
-        case "customsUnit":
-          return (quantity > 0 ? customsAllocated / quantity : 0).toFixed(6);
-        case "customsTotal":
-          return customsAllocated.toFixed(6);
-        case "totalAmount2":
-        case "allContainers":
-          return (totalUsd + roadAllocated + customsAllocated).toFixed(6);
-        case "actions":
-          return "Изменить";
-        default:
-          return "";
-      }
-    });
-    const label = IMPORT_PREVIEW_COLUMNS.find((column) => column.id === columnId)?.label ?? columnId;
-    setPreviewWidth(columnId, estimateColumnWidth([label, ...values]));
-  }
 
   useEffect(() => {
     if (previewState.preview) {
@@ -577,22 +467,13 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                 <div className="text-lg font-semibold tracking-[0.18em] text-slate-900">TRUCK ALL-1</div>
                 <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Import preview sheet</div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={resetPreviewWidths}
-                  className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Сбросить ширины
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPreviewModalOpen(false)}
-                  className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Закрыть
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="rounded-lg border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Закрыть
+              </button>
             </div>
 
             <div className="grid max-h-[75vh] min-h-0 gap-3 overflow-auto p-4">
@@ -652,49 +533,21 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                     </div>
                   </div>
 
-                  <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr_1.15fr]">
-                    <div className="overflow-auto rounded-xl border border-slate-400">
-                      <div className="grid min-w-[980px] grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RMB</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">USD</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL CBM</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL N.W. KGS</div>
-                        <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RAZNITASA</div>
+                  <div className="overflow-auto rounded-xl border border-slate-400">
+                    <div className="grid min-w-[980px] grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">USD</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL CBM</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL N.W. KGS</div>
+                      <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">YO&#39;L GA</div>
+                      <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RASTAMOJKA</div>
 
-                        <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.quantity ?? 0}</div>
-                        <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draft.totalPurchaseCNY.toFixed(2)}</div>
-                        <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draft.totalPurchaseUSD.toFixed(2)}</div>
-                        <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.totalCbm?.toFixed(4) ?? "0.0000"}</div>
-                        <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.totalKg?.toFixed(3) ?? "0.000"}</div>
-                        <div className="px-3 py-4 text-2xl font-semibold">{((draftInvestmentTotals || 0) - ((draft.totalPurchaseUSD || 0) + (draftExpenseTotals?.total || 0))).toFixed(2)}</div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-400">
-                      <div className="grid grid-cols-[1.2fr_1fr_1fr] text-center text-sm">
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-3 text-xl font-semibold uppercase tracking-[0.18em]">KURS</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-3 text-xl font-semibold uppercase tracking-[0.18em]">YO&#39;L GA</div>
-                        <div className="border-b-2 border-slate-400 px-3 py-3 text-xl font-semibold uppercase tracking-[0.18em]">RASTAMOJKA</div>
-
-                        <div className="border-r border-slate-300 px-3 py-4 text-3xl font-semibold">{draft.exchangeRate.toFixed(4)}</div>
-                        <div className="border-r border-slate-300 px-3 py-4 text-3xl font-semibold">{draftExpenseTotals?.road?.toFixed(2) ?? "0.00"}</div>
-                        <div className="px-3 py-4 text-3xl font-semibold">{draftExpenseTotals?.customs?.toFixed(2) ?? "0.00"}</div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-400">
-                      <div className="grid grid-cols-[1fr_1fr_1fr_1fr] text-center text-sm">
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL AMOUNT</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold">ortacha birlik</div>
-                        <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold">YOLGA VA Rastamojka</div>
-                        <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">BIR DONASI</div>
-
-                        <div className="border-r border-slate-300 px-3 py-3 text-2xl font-semibold">{draft.totalPurchaseUSD.toFixed(2)}</div>
-                        <div className="border-r border-slate-300 px-3 py-3 text-xl font-semibold">{(draftItemTotals?.quantity ? draft.totalPurchaseUSD / draftItemTotals.quantity : 0).toFixed(2)}</div>
-                        <div className="border-r border-slate-300 px-3 py-3 text-xl font-semibold">{(draftItemTotals?.quantity ? (draftExpenseTotals?.total || 0) / draftItemTotals.quantity : 0).toFixed(2)}</div>
-                        <div className="px-3 py-3 text-xl font-semibold">{(draftItemTotals?.quantity ? ((draft.totalPurchaseUSD || 0) + (draftExpenseTotals?.total || 0)) / draftItemTotals.quantity : 0).toFixed(2)}</div>
-                      </div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.quantity ?? 0}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draft.totalPurchaseUSD.toFixed(2)}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.totalCbm?.toFixed(4) ?? "0.0000"}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftItemTotals?.totalKg?.toFixed(3) ?? "0.000"}</div>
+                      <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{draftExpenseTotals?.road?.toFixed(2) ?? "0.00"}</div>
+                      <div className="px-3 py-4 text-2xl font-semibold">{draftExpenseTotals?.customs?.toFixed(2) ?? "0.00"}</div>
                     </div>
                   </div>
 
@@ -704,113 +557,95 @@ export function ImportContainerFromExcelPage({ defaultRate }: { defaultRate: num
                       <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Товары ({draft.items.length})</div>
                     </div>
                     <div className="max-h-[340px] overflow-auto rounded-lg border border-slate-400 bg-white">
-                      <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ minWidth: previewTableWidth }}>
-                        <colgroup>
-                          {IMPORT_PREVIEW_COLUMNS.map((column) => (
-                            <col key={column.id} style={{ width: getPreviewWidth(column.id) }} />
-                          ))}
-                        </colgroup>
+                      <table className="w-full min-w-[1220px] border-separate border-spacing-0 text-left text-xs">
                         <thead className="sticky top-0 bg-white text-slate-800">
                           <tr>
-                            {IMPORT_PREVIEW_COLUMNS.map((column) => (
-                              <ResizableHeaderCell
-                                key={column.id}
-                                label={column.label}
-                                width={getPreviewWidth(column.id)}
-                                onResizeStart={(event) => startPreviewResize(column.id, event)}
-                                onAutoSize={() => autoSizePreviewColumn(column.id)}
-                                className="px-3 py-3 text-xs uppercase tracking-[0.08em]"
-                              />
-                            ))}
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">FACTORI NAME</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">OSSO NAME</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">QUANTITY</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">UNIT PRICE</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TOTAL CBM</th>
+                            <th className="border-b-2 border-r border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">TOTAL N.W. KGS</th>
+                            <th className="border-b-2 border-slate-400 px-3 py-3 text-center font-semibold uppercase tracking-[0.08em]">ACTION</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {draft.items.map((row, idx) => {
-                            const totalUsd = row.lineTotalUSD ?? 0;
-                            const quantity = row.quantity || 0;
-                            const roadAllocated = (draft.totalPurchaseUSD || 0) > 0 ? ((draftExpenseTotals?.road || 0) * totalUsd) / (draft.totalPurchaseUSD || 1) : 0;
-                            const customsAllocated = (draft.totalPurchaseUSD || 0) > 0 ? ((draftExpenseTotals?.customs || 0) * totalUsd) / (draft.totalPurchaseUSD || 1) : 0;
-                            const totalAllocated = roadAllocated + customsAllocated;
-                            const shareRatio = (draft.totalPurchaseUSD || 0) > 0 ? totalUsd / (draft.totalPurchaseUSD || 1) : 0;
-                            return (
-                              <tr key={`${row.productId}-${idx}`} className="text-slate-800">
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.sku}</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.productName}</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">—</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">
-                                  {editItemIdx === idx ? (
-                                    <input
-                                      value={row.unitPriceUSD === null ? "" : String(row.unitPriceUSD)}
-                                      onChange={(e) => {
-                                        const next = structuredClone(draft);
-                                        const v = e.target.value.trim();
-                                        next.items[idx]!.unitPriceUSD = v ? Number(v) : null;
-                                        setDraft(next);
-                                      }}
-                                      inputMode="decimal"
-                                      className="w-28 rounded border border-[var(--border)] px-2 py-1 text-xs"
-                                    />
-                                  ) : row.unitPriceUSD !== null ? row.unitPriceUSD.toFixed(2) : "—"}
-                                </td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.sizeLabel || "—"}</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">
-                                  {editItemIdx === idx ? (
-                                    <input
-                                      value={String(row.quantity)}
-                                      onChange={(e) => {
-                                        const next = structuredClone(draft);
-                                        next.items[idx]!.quantity = Math.max(0, Math.floor(Number(e.target.value || 0)));
-                                        setDraft(next);
-                                      }}
-                                      inputMode="numeric"
-                                      className="w-24 rounded border border-[var(--border)] px-2 py-1 text-xs"
-                                    />
-                                  ) : row.quantity}
-                                </td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">
-                                  {editItemIdx === idx ? (
-                                    <input
-                                      value={row.lineTotalUSD === null ? "" : String(row.lineTotalUSD)}
-                                      onChange={(e) => {
-                                        const next = structuredClone(draft);
-                                        const v = e.target.value.trim();
-                                        next.items[idx]!.lineTotalUSD = v ? Number(v) : null;
-                                        setDraft(next);
-                                      }}
-                                      inputMode="decimal"
-                                      className="w-28 rounded border border-[var(--border)] px-2 py-1 text-xs"
-                                    />
-                                  ) : row.lineTotalUSD !== null ? row.lineTotalUSD.toFixed(2) : "—"}
-                                </td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.cbm !== null ? row.cbm.toFixed(4) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.kg !== null ? row.kg.toFixed(3) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.totalCbm !== null ? row.totalCbm.toFixed(4) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 px-3 py-2">{row.kg !== null ? ((row.kg || 0) * (row.quantity || 0)).toFixed(3) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">DALEE</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{quantity > 0 ? (totalUsd / quantity).toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{totalUsd ? totalUsd.toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{shareRatio ? shareRatio.toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{totalAllocated ? totalAllocated.toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{quantity > 0 ? ((totalUsd + totalAllocated) / quantity).toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{(totalUsd + totalAllocated).toFixed(6)}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{quantity > 0 ? (roadAllocated / quantity).toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{roadAllocated ? roadAllocated.toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{quantity > 0 ? (customsAllocated / quantity).toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{customsAllocated ? customsAllocated.toFixed(6) : "—"}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{(totalUsd + roadAllocated + customsAllocated).toFixed(6)}</td>
-                                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2">{(totalUsd + roadAllocated + customsAllocated).toFixed(6)}</td>
-                                <td className="border-b border-slate-300 px-3 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditItemIdx((prev) => (prev === idx ? null : idx))}
-                                    className="rounded border border-[var(--border)] bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
-                                  >
-                                    {editItemIdx === idx ? "Готово" : "Изменить"}
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          {draft.items.map((row, idx) => (
+                            <tr key={`${row.productId}-${idx}`} className="text-slate-800">
+                              <td className="border-b border-r border-slate-300 px-3 py-2">{row.sku}</td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">{row.productName}</td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
+                                {editItemIdx === idx ? (
+                                  <input
+                                    value={String(row.quantity)}
+                                    onChange={(e) => {
+                                      const next = structuredClone(draft);
+                                      next.items[idx]!.quantity = Math.max(0, Math.floor(Number(e.target.value || 0)));
+                                      setDraft(next);
+                                    }}
+                                    inputMode="numeric"
+                                    className="w-24 rounded border border-[var(--border)] px-2 py-1 text-xs"
+                                  />
+                                ) : (
+                                  row.quantity
+                                )}
+                              </td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
+                                {editItemIdx === idx ? (
+                                  <input
+                                    value={row.unitPriceUSD === null ? "" : String(row.unitPriceUSD)}
+                                    onChange={(e) => {
+                                      const next = structuredClone(draft);
+                                      const v = e.target.value.trim();
+                                      next.items[idx]!.unitPriceUSD = v ? Number(v) : null;
+                                      setDraft(next);
+                                    }}
+                                    inputMode="decimal"
+                                    className="w-28 rounded border border-[var(--border)] px-2 py-1 text-xs"
+                                  />
+                                ) : row.unitPriceUSD !== null ? (
+                                  row.unitPriceUSD.toFixed(2)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
+                                {editItemIdx === idx ? (
+                                  <input
+                                    value={row.lineTotalUSD === null ? "" : String(row.lineTotalUSD)}
+                                    onChange={(e) => {
+                                      const next = structuredClone(draft);
+                                      const v = e.target.value.trim();
+                                      next.items[idx]!.lineTotalUSD = v ? Number(v) : null;
+                                      setDraft(next);
+                                    }}
+                                    inputMode="decimal"
+                                    className="w-28 rounded border border-[var(--border)] px-2 py-1 text-xs"
+                                  />
+                                ) : row.lineTotalUSD !== null ? (
+                                  row.lineTotalUSD.toFixed(2)
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
+                                {row.totalCbm !== null ? row.totalCbm.toFixed(4) : "—"}
+                              </td>
+                              <td className="border-b border-r border-slate-300 px-3 py-2">
+                                {row.kg !== null ? ((row.kg || 0) * (row.quantity || 0)).toFixed(3) : "—"}
+                              </td>
+                              <td className="border-b border-slate-300 px-3 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditItemIdx((prev) => (prev === idx ? null : idx))}
+                                  className="rounded border border-[var(--border)] bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  {editItemIdx === idx ? "Готово" : "Изменить"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>

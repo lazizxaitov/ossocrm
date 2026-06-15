@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useActionState, useMemo, useState } from "react";
 import { createContainerAction, type CreateContainerFormState } from "@/app/(main)/containers/actions";
-import { ResizableHeaderCell, type ResizableColumn, useResizableColumns } from "@/components/ui/use-resizable-columns";
 
 type ProductOption = {
   id: string;
@@ -35,49 +34,6 @@ type GridRow = {
   exchangeRate: string;
   totalAmountUSD: string;
 };
-
-type SheetColumnId =
-  | keyof GridRow
-  | "picture"
-  | "dalee"
-  | "avgUnitUsd"
-  | "shareRatio"
-  | "expenseAllocated"
-  | "finalUnitCost"
-  | "jami"
-  | "transportUnit"
-  | "transportTotal"
-  | "customsUnit"
-  | "customsTotal"
-  | "grandTotal"
-  | "grandTotalAllContainers";
-
-const GOODS_SHEET_COLUMNS: Array<ResizableColumn & { id: SheetColumnId; editable?: boolean }> = [
-  { id: "factoryName", label: "FACTORI NAME", defaultWidth: 240, editable: true },
-  { id: "localName", label: "OSSO NAME", defaultWidth: 240, editable: true },
-  { id: "picture", label: "PICTURE/图片", defaultWidth: 130 },
-  { id: "priceCNY", label: "UNIT PRICE", defaultWidth: 130, editable: true },
-  { id: "saize", label: "SAIZE", defaultWidth: 210, editable: true },
-  { id: "quantity", label: "QUANTITY ( SET )", defaultWidth: 130, editable: true },
-  { id: "totalAmountCNY", label: "TOTAL AMOUNT", defaultWidth: 150, editable: true },
-  { id: "cbm", label: "CBM", defaultWidth: 120, editable: true },
-  { id: "kg", label: "KG", defaultWidth: 120, editable: true },
-  { id: "totalCbm", label: "TOTAL CBM", defaultWidth: 140, editable: true },
-  { id: "nwKgs", label: "TOTAL N.W. KGS", defaultWidth: 150, editable: true },
-  { id: "dalee", label: "DALEE", defaultWidth: 110 },
-  { id: "avgUnitUsd", label: "Y - $", defaultWidth: 120 },
-  { id: "totalAmountUSD", label: "TOTAL AMOUNT", defaultWidth: 150, editable: true },
-  { id: "shareRatio", label: "ortacha birlik", defaultWidth: 140 },
-  { id: "expenseAllocated", label: "YOLGA VA Rastamojka ortacha birligi", defaultWidth: 220 },
-  { id: "finalUnitCost", label: "BIR DONASI", defaultWidth: 140 },
-  { id: "jami", label: "JAMI", defaultWidth: 150 },
-  { id: "transportUnit", label: "TRANSPORTGA", defaultWidth: 140 },
-  { id: "transportTotal", label: "TOTAL AMOUNT TRANSPORTGA", defaultWidth: 190 },
-  { id: "customsUnit", label: "RASTAMOJKAGA", defaultWidth: 140 },
-  { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA", defaultWidth: 210 },
-  { id: "grandTotal", label: "TOTAL AMOUNT", defaultWidth: 160 },
-  { id: "grandTotalAllContainers", label: "TOTAL AMOUNT ALL CONTEYNERS", defaultWidth: 230 },
-];
 
 type InvestmentRow = {
   key: number;
@@ -128,16 +84,6 @@ function calcLineTotalUsd(row: Pick<GridRow, "quantity" | "priceCNY" | "totalAmo
   const rate = toNumber(row.exchangeRate);
   if (totalCny > 0 && rate > 0) return String(Number((totalCny * rate).toFixed(2)));
   return "";
-}
-
-function formatSheetNumber(value: number, digits = 2) {
-  if (!Number.isFinite(value) || value === 0) return "";
-  return String(Number(value.toFixed(digits)));
-}
-
-function estimateColumnWidth(values: unknown[], min = 100, max = 420) {
-  const longest = values.reduce<number>((best, value) => Math.max(best, String(value ?? "").length), 0);
-  return Math.min(max, Math.max(min, longest * 9 + 36));
 }
 
 export function CreateContainerExcelPage({
@@ -661,62 +607,22 @@ export function CreateContainerExcelPage({
     });
   }
 
-  const columns = GOODS_SHEET_COLUMNS;
-  const goodsActionColumn = 120;
-  const { getWidth, totalWidth, startResize, setColumnWidth, resetWidths } = useResizableColumns(
-    "osso:containers-excel-columns:v1",
-    [...columns, { id: "actions", label: "ACTION", defaultWidth: goodsActionColumn }],
-  );
-
-  function autoSizeColumn(columnId: SheetColumnId | "actions") {
-    if (columnId === "actions") {
-      setColumnWidth(columnId, goodsActionColumn);
-      return;
-    }
-    const values = rows.map((row) => {
-      const product = row.productId ? productMap.get(row.productId) ?? null : null;
-      const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-      const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcLineTotalUsd(row));
-      const shareRatio = productTotals.totalUsd > 0 ? totalAmountUsd / productTotals.totalUsd : 0;
-      const allocatedExpenses = shareRatio * expenseTotals.all;
-      const transportTotal = shareRatio * expenseTotals.road;
-      const customsTotal = shareRatio * expenseTotals.customs;
-      const avgUnitUsd = quantity > 0 ? totalAmountUsd / quantity : 0;
-      const finalUnitCost = quantity > 0 ? (totalAmountUsd + allocatedExpenses) / quantity : 0;
-      const grandTotal = totalAmountUsd + transportTotal + customsTotal;
-      switch (columnId) {
-        case "picture":
-          return product?.imagePath ? "image" : "";
-        case "dalee":
-          return "DALEE";
-        case "avgUnitUsd":
-          return formatSheetNumber(avgUnitUsd, 6);
-        case "shareRatio":
-          return formatSheetNumber(shareRatio, 6);
-        case "expenseAllocated":
-          return formatSheetNumber(allocatedExpenses, 6);
-        case "finalUnitCost":
-          return formatSheetNumber(finalUnitCost, 6);
-        case "jami":
-          return formatSheetNumber(totalAmountUsd + allocatedExpenses, 6);
-        case "transportUnit":
-          return formatSheetNumber(quantity > 0 ? transportTotal / quantity : 0, 6);
-        case "transportTotal":
-          return formatSheetNumber(transportTotal, 6);
-        case "customsUnit":
-          return formatSheetNumber(quantity > 0 ? customsTotal / quantity : 0, 6);
-        case "customsTotal":
-          return formatSheetNumber(customsTotal, 6);
-        case "grandTotal":
-        case "grandTotalAllContainers":
-          return formatSheetNumber(grandTotal, 6);
-        default:
-          return row[columnId] ?? "";
-      }
-    });
-    const label = columns.find((column) => column.id === columnId)?.label ?? String(columnId);
-    setColumnWidth(columnId, estimateColumnWidth([label, ...values]));
-  }
+  const columns: Array<{ id: keyof GridRow | "picture"; label: string; width: string }> = [
+    { id: "factoryName", label: "FACTORI NAME", width: "min-w-[250px]" },
+    { id: "localName", label: "OSSO NAME", width: "min-w-[250px]" },
+    { id: "picture", label: "PICTURE / 图片", width: "min-w-[140px]" },
+    { id: "priceCNY", label: "UNIT PRICE", width: "min-w-[170px]" },
+    { id: "saize", label: "SAIZE", width: "min-w-[230px]" },
+    { id: "color", label: "Product color", width: "min-w-[220px]" },
+    { id: "quantity", label: "QUANTITY ( SET )", width: "min-w-[170px]" },
+    { id: "totalAmountCNY", label: "TOTAL AMOUNT", width: "min-w-[190px]" },
+    { id: "cbm", label: "CBM", width: "min-w-[140px]" },
+    { id: "kg", label: "KG", width: "min-w-[140px]" },
+    { id: "totalCbm", label: "TOTAL CBM", width: "min-w-[170px]" },
+    { id: "nwKgs", label: "TOTAL N.W. KGS", width: "min-w-[190px]" },
+    { id: "exchangeRate", label: "Y - $", width: "min-w-[150px]" },
+    { id: "totalAmountUSD", label: "TOTAL AMOUNT", width: "min-w-[180px]" },
+  ];
 
   const investmentColumns: Array<{ id: keyof InvestmentRow; label: string; width: string }> = [
     { id: "investorName", label: "Инвестор", width: "min-w-[280px]" },
@@ -811,20 +717,13 @@ export function CreateContainerExcelPage({
       </article>
 
       <div className="grid min-h-0 grid-rows-[1fr_auto_auto] gap-4">
-        <article className="order-2 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+        <article className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
             <div>
               <h2 className="text-lg font-semibold tracking-[0.18em] text-slate-900">TRUCK ALL-1</h2>
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Main goods block</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={resetWidths}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Сбросить ширины
-              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -845,42 +744,25 @@ export function CreateContainerExcelPage({
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto bg-white">
-            <div style={{ minWidth: totalWidth + goodsActionColumn }}>
+            <div className="min-w-[2800px]">
               <table className="w-full border-separate border-spacing-0 border border-slate-400 text-left text-sm">
-              <colgroup>
-                {columns.map((c) => (
-                  <col key={String(c.id)} style={{ width: getWidth(String(c.id)) }} />
-                ))}
-                <col style={{ width: goodsActionColumn }} />
-              </colgroup>
               <thead className="sticky top-0 z-10 bg-white text-slate-800">
                 <tr>
                   {columns.map((c) => (
-                    <ResizableHeaderCell
-                      key={String(c.id)}
-                      label={c.label}
-                      width={getWidth(String(c.id))}
-                      onResizeStart={(event) => startResize(String(c.id), event)}
-                      onAutoSize={() => autoSizeColumn(c.id)}
-                      className="uppercase tracking-[0.08em]"
-                    />
+                    <th
+                      key={c.label}
+                      className={`border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em] ${c.width}`}
+                    >
+                      {c.label}
+                    </th>
                   ))}
-                  <th className="border-b-2 border-slate-400 px-2 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]" style={{ width: goodsActionColumn, minWidth: goodsActionColumn }}>—</th>
+                  <th className="min-w-[120px] border-b-2 border-slate-400 px-2 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">—</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, rowIndex) => {
                   const product = r.productId ? productMap.get(r.productId) ?? null : null;
-                  const pasteableCols = columns.filter((c) => c.editable);
-                  const quantity = Math.max(0, Math.floor(toNumber(r.quantity)));
-                  const totalAmountUsd = toNumber(r.totalAmountUSD) || toNumber(calcLineTotalUsd(r));
-                  const shareRatio = productTotals.totalUsd > 0 ? totalAmountUsd / productTotals.totalUsd : 0;
-                  const allocatedExpenses = shareRatio * expenseTotals.all;
-                  const transportTotal = shareRatio * expenseTotals.road;
-                  const customsTotal = shareRatio * expenseTotals.customs;
-                  const avgUnitUsd = quantity > 0 ? totalAmountUsd / quantity : 0;
-                  const finalUnitCost = quantity > 0 ? (totalAmountUsd + allocatedExpenses) / quantity : 0;
-                  const grandTotal = totalAmountUsd + transportTotal + customsTotal;
+                  const pasteableCols = columns.filter((c) => c.id !== "picture");
 
                   return (
                     <tr key={r.key}>
@@ -903,41 +785,7 @@ export function CreateContainerExcelPage({
                           );
                         }
                         const field = c.id as keyof GridRow;
-                        const colIndex = pasteableCols.findIndex((x) => x.id === c.id);
-                        const computedValue =
-                          c.id === "dalee"
-                            ? "DALEE"
-                            : c.id === "avgUnitUsd"
-                              ? formatSheetNumber(avgUnitUsd, 6)
-                              : c.id === "shareRatio"
-                                ? formatSheetNumber(shareRatio, 6)
-                                : c.id === "expenseAllocated"
-                                  ? formatSheetNumber(allocatedExpenses, 6)
-                                  : c.id === "finalUnitCost"
-                                    ? formatSheetNumber(finalUnitCost, 6)
-                                    : c.id === "jami"
-                                      ? formatSheetNumber(totalAmountUsd + allocatedExpenses, 6)
-                                      : c.id === "transportUnit"
-                                        ? formatSheetNumber(quantity > 0 ? transportTotal / quantity : 0, 6)
-                                        : c.id === "transportTotal"
-                                          ? formatSheetNumber(transportTotal, 6)
-                                          : c.id === "customsUnit"
-                                            ? formatSheetNumber(quantity > 0 ? customsTotal / quantity : 6)
-                                            : c.id === "customsTotal"
-                                              ? formatSheetNumber(customsTotal, 6)
-                                              : c.id === "grandTotal"
-                                                ? formatSheetNumber(grandTotal, 6)
-                                                : c.id === "grandTotalAllContainers"
-                                                  ? formatSheetNumber(grandTotal, 6)
-                                                  : null;
-
-                        if (!c.editable) {
-                          return (
-                            <td key={String(c.id)} className="border-b border-r border-slate-300 bg-slate-50 px-3 py-3 text-[14px]">
-                              {computedValue || "—"}
-                            </td>
-                          );
-                        }
+                        const colIndex = pasteableCols.findIndex((x) => x.id === field);
                         return (
                           <td key={String(field)} className="border-b border-r border-slate-300 px-0">
                             <input
@@ -980,7 +828,7 @@ export function CreateContainerExcelPage({
           </div>
         </article>
 
-        <article className="order-1 grid gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
+        <article className="grid gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
           <div className="overflow-auto rounded-xl border border-slate-400">
             <div className="grid min-w-[980px] grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
               <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
@@ -1055,7 +903,7 @@ export function CreateContainerExcelPage({
           </div>
         </article>
 
-        <article className="order-3 flex max-h-[240px] min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+        <article className="flex max-h-[240px] min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-900">Инвесторы</h2>
             <button

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ResizableHeaderCell, type ResizableColumn, useResizableColumns } from "@/components/ui/use-resizable-columns";
 
 type ProductCategoryItem = {
   id: string;
@@ -16,6 +15,7 @@ type GridRow = {
   localName: string;
   priceCNY: string;
   size: string;
+  color: string;
   quantity: string;
   totalAmountCNY: string;
   cbm: string;
@@ -29,48 +29,6 @@ type GridRow = {
   salePriceUSD: string;
   imageFile: File | null;
 };
-
-const PRODUCT_SHEET_COLUMNS: ResizableColumn[] = [
-  { id: "factoryName", label: "FACTORI NAME", defaultWidth: 220 },
-  { id: "localName", label: "OSSO NAME", defaultWidth: 250 },
-  { id: "picture", label: "PICTURE / 图片", defaultWidth: 150 },
-  { id: "priceCNY", label: "UNIT PRICE", defaultWidth: 130 },
-  { id: "size", label: "SAIZE", defaultWidth: 170 },
-  { id: "quantity", label: "QUANTITY ( SET )", defaultWidth: 130 },
-  { id: "totalAmountCNY", label: "TOTAL AMOUNT", defaultWidth: 150 },
-  { id: "cbm", label: "CBM", defaultWidth: 120 },
-  { id: "kg", label: "KG", defaultWidth: 120 },
-  { id: "totalCbm", label: "TOTAL CBM", defaultWidth: 140 },
-  { id: "netWorthKgs", label: "TOTAL N.W. KGS", defaultWidth: 150 },
-  { id: "dalee", label: "DALEE", defaultWidth: 110 },
-  { id: "yusd", label: "Y - $", defaultWidth: 120 },
-  { id: "totalAmountUSD", label: "TOTAL AMOUNT", defaultWidth: 150 },
-  { id: "avgUnit", label: "ortacha birlik", defaultWidth: 140 },
-  { id: "expenseUnit", label: "YOLGA VA Rastamojka ortacha birligi", defaultWidth: 220 },
-  { id: "birDonasi", label: "BIR DONASI", defaultWidth: 140 },
-  { id: "jami", label: "JAMI", defaultWidth: 150 },
-  { id: "transportga", label: "TRANSPORTGA", defaultWidth: 140 },
-  { id: "transportTotal", label: "TOTAL AMOUNT TRANSPORTGA", defaultWidth: 190 },
-  { id: "customsUnit", label: "RASTAMOJKAGA", defaultWidth: 140 },
-  { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA", defaultWidth: 210 },
-  { id: "totalAmount2", label: "TOTAL AMOUNT", defaultWidth: 160 },
-  { id: "allContainers", label: "TOTAL AMOUNT ALL CONTEYNERS", defaultWidth: 230 },
-  { id: "category", label: "Категория", defaultWidth: 180 },
-  { id: "description", label: "Описание", defaultWidth: 260 },
-  { id: "salePriceUSD", label: "Цена продажи USD", defaultWidth: 150 },
-  { id: "include", label: "Вкл", defaultWidth: 80 },
-  { id: "delete", label: "Удалить", defaultWidth: 90 },
-];
-
-function formatSheetNumber(value: number, digits = 2) {
-  if (!Number.isFinite(value) || value === 0) return "";
-  return String(Number(value.toFixed(digits)));
-}
-
-function estimateColumnWidth(values: unknown[], min = 100, max = 420) {
-  const longest = values.reduce<number>((best, value) => Math.max(best, String(value ?? "").length), 0);
-  return Math.min(max, Math.max(min, longest * 9 + 36));
-}
 
 type CreateProductsExcelPageProps = {
   categories: ProductCategoryItem[];
@@ -117,6 +75,7 @@ function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
     localName: "",
     priceCNY: "",
     size: "Без размера",
+    color: "",
     quantity: "1",
     totalAmountCNY: "",
     cbm: "",
@@ -145,44 +104,6 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
-  const { getWidth, totalWidth, startResize, setColumnWidth, resetWidths } = useResizableColumns(
-    "osso:products-excel-columns:v1",
-    PRODUCT_SHEET_COLUMNS,
-  );
-
-  function autoSizeColumn(columnId: string) {
-    const values = rows.map((row) => {
-      const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-      const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcTotalAmountUsd(row));
-      const shareRatio = totals.totalAmountUSD > 0 ? totalAmountUsd / totals.totalAmountUSD : 0;
-      const avgUnitUsd = quantity > 0 ? totalAmountUsd / quantity : 0;
-      switch (columnId) {
-        case "picture":
-          return row.imageFile ? row.imageFile.name : "";
-        case "dalee":
-          return "DALEE";
-        case "yusd":
-          return formatSheetNumber(avgUnitUsd, 6);
-        case "avgUnit":
-          return formatSheetNumber(shareRatio, 6);
-        case "expenseUnit":
-        case "transportga":
-        case "transportTotal":
-        case "customsUnit":
-        case "customsTotal":
-          return "—";
-        case "birDonasi":
-        case "jami":
-        case "totalAmount2":
-        case "allContainers":
-          return formatSheetNumber(totalAmountUsd, 6);
-        default:
-          return (row as Record<string, unknown>)[columnId] ?? "";
-      }
-    });
-    const label = PRODUCT_SHEET_COLUMNS.find((column) => column.id === columnId)?.label ?? columnId;
-    setColumnWidth(columnId, estimateColumnWidth([label, ...values]));
-  }
 
   const categoryOptions = useMemo(
     () => [{ value: "", label: "Без категории" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
@@ -279,7 +200,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
             name: row.localName.trim(),
             categoryId: row.categoryId.trim() || null,
             size: row.size.trim() || "Без размера",
-            color: null,
+            color: row.color.trim() || null,
             description: row.description.trim() || null,
             costPriceUSD,
             cbm: toNumber(row.cbm),
@@ -305,7 +226,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
           name: row.name,
           categoryId: row.categoryId,
           size: row.size,
-          color: null,
+          color: row.color,
           description: row.description,
           costPriceUSD: row.costPriceUSD,
           cbm: row.cbm > 0 ? row.cbm : null,
@@ -383,13 +304,6 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
         </button>
         <button
           type="button"
-          onClick={resetWidths}
-          className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Сбросить ширины
-        </button>
-        <button
-          type="button"
           onClick={submitRows}
           disabled={isSubmitting}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
@@ -412,59 +326,40 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
         </div>
       </div>
 
-      <div className="overflow-auto rounded-xl border border-slate-400">
-        <div className="grid min-w-[980px] grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
-          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">PRODUCTS</div>
-          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
-          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RMB</div>
-          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">USD</div>
-          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL CBM</div>
-          <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL N.W. KGS</div>
-
-          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.products}</div>
-          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.quantity}</div>
-          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.totalAmountCNY.toFixed(2)}</div>
-          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.totalAmountUSD.toFixed(2)}</div>
-          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.totalCbm.toFixed(4)}</div>
-          <div className="px-3 py-4 text-2xl font-semibold">{totals.netWorthKgs.toFixed(3)}</div>
-        </div>
-      </div>
-
       <div ref={tableWrapRef} className="min-h-0 overflow-auto rounded-xl border border-slate-400">
-        <table className="w-full border-separate border-spacing-0 text-left text-sm" style={{ minWidth: totalWidth }}>
-          <colgroup>
-            {PRODUCT_SHEET_COLUMNS.map((column) => (
-              <col key={column.id} style={{ width: getWidth(column.id) }} />
-            ))}
-          </colgroup>
+        <table className="min-w-[2850px] w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-white text-slate-800">
             <tr>
-              {PRODUCT_SHEET_COLUMNS.map((column, index) => (
-                <ResizableHeaderCell
-                  key={column.id}
-                  label={column.label}
-                  width={getWidth(column.id)}
-                  onResizeStart={(event) => startResize(column.id, event)}
-                  onAutoSize={() => autoSizeColumn(column.id)}
-                  className={index < PRODUCT_SHEET_COLUMNS.length - 1 ? "uppercase tracking-[0.08em]" : ""}
-                />
-              ))}
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">FACTORI NAME</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">OSSO NAME</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">PICTURE / 图片</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">UNIT PRICE</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">SAIZE</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">Product color</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">QUANTITY ( SET )</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">CBM</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">KG</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL CBM</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL N.W. KGS</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">Y - $</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Категория</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Описание</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Цена продажи USD</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Вкл</th>
+              <th className="border-b-2 border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Удалить</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-              const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcTotalAmountUsd(row));
-              const shareRatio = totals.totalAmountUSD > 0 ? totalAmountUsd / totals.totalAmountUSD : 0;
-              const avgUnitUsd = quantity > 0 ? totalAmountUsd / quantity : 0;
-              return (
+            {rows.map((row) => (
               <tr key={row.key} className="align-top text-slate-800">
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <input
                     value={row.factoryName}
                     onChange={(event) => updateRow(row.key, { factoryName: event.target.value })}
                     placeholder="Завод / SKU"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-52 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -472,7 +367,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     value={row.localName}
                     onChange={(event) => updateRow(row.key, { localName: event.target.value })}
                     placeholder="Название у нас"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-60 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -496,14 +391,21 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.0001"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-32 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <input
                     value={row.size}
                     onChange={(event) => updateRow(row.key, { size: event.target.value })}
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-40 rounded border border-[var(--border)] px-2 py-2"
+                  />
+                </td>
+                <td className="border-b border-r border-slate-300 px-3 py-2">
+                  <input
+                    value={row.color}
+                    onChange={(event) => updateRow(row.key, { color: event.target.value })}
+                    className="w-40 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -513,7 +415,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="1"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-28 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -523,7 +425,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.01"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-36 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -533,7 +435,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.0001"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-28 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -543,7 +445,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.01"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-28 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -553,7 +455,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.0001"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-32 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -563,7 +465,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.001"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-32 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -573,7 +475,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.0001"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-28 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -583,53 +485,14 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.01"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-36 rounded border border-[var(--border)] px-2 py-2"
                   />
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] font-medium text-slate-700">DALEE</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(avgUnitUsd, 6) || "—"}</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(totalAmountUsd, 6) || "—"}</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(shareRatio, 6) || "—"}</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">—</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(avgUnitUsd, 6) || "—"}</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(totalAmountUsd, 6) || "—"}</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">—</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">—</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">—</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">—</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(totalAmountUsd, 6) || "—"}</div>
-                </td>
-                <td className="border-b border-r border-slate-300 px-3 py-2">
-                  <div className="w-full bg-slate-50 px-2 py-2 text-center text-[13px] text-slate-700">{formatSheetNumber(totalAmountUsd, 6) || "—"}</div>
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <select
                     value={row.categoryId}
                     onChange={(event) => updateRow(row.key, { categoryId: event.target.value })}
-                    className="min-w-0 w-full rounded border border-[var(--border)] bg-white px-2 py-2"
+                    className="w-48 rounded border border-[var(--border)] bg-white px-2 py-2"
                   >
                     {categoryOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -643,7 +506,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     value={row.description}
                     onChange={(event) => updateRow(row.key, { description: event.target.value })}
                     placeholder="Описание"
-                    className="min-h-24 min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="min-h-24 w-80 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -653,7 +516,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     type="number"
                     min={0}
                     step="0.01"
-                    className="min-w-0 w-full rounded border border-[var(--border)] px-2 py-2"
+                    className="w-32 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -673,12 +536,28 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                   </button>
                 </td>
               </tr>
-              );
-            })}
+            ))}
           </tbody>
         </table>
       </div>
 
+      <div className="overflow-auto rounded-xl border border-slate-400">
+        <div className="grid min-w-[980px] grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
+          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">PRODUCTS</div>
+          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
+          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RMB</div>
+          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">USD</div>
+          <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL CBM</div>
+          <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL N.W. KGS</div>
+
+          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.products}</div>
+          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.quantity}</div>
+          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.totalAmountCNY.toFixed(2)}</div>
+          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.totalAmountUSD.toFixed(2)}</div>
+          <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{totals.totalCbm.toFixed(4)}</div>
+          <div className="px-3 py-4 text-2xl font-semibold">{totals.netWorthKgs.toFixed(3)}</div>
+        </div>
+      </div>
     </article>
   );
 }
