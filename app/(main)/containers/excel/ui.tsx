@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import { createContainerAction, type CreateContainerFormState } from "@/app/(main)/containers/actions";
 
 type ProductOption = {
@@ -86,6 +86,64 @@ function calcLineTotalUsd(row: Pick<GridRow, "quantity" | "priceCNY" | "totalAmo
   return "";
 }
 
+function getWorksheetCellText(value: unknown) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if (typeof value === "object") {
+    const candidate = value as { text?: string; result?: string | number; richText?: Array<{ text?: string }> };
+    if (typeof candidate.text === "string") return candidate.text.trim();
+    if (typeof candidate.result === "string" || typeof candidate.result === "number") return String(candidate.result).trim();
+    if (Array.isArray(candidate.richText)) return candidate.richText.map((item) => item.text ?? "").join("").trim();
+  }
+  return "";
+}
+
+function normalizeHeader(raw: string) {
+  return raw.toLowerCase().replace(/\s+/g, " ").replace(/[`'"]/g, "").trim();
+}
+
+function getWorksheetCellNumber(value: unknown) {
+  if (typeof value === "number") return value;
+  if (typeof value === "object" && value !== null) {
+    const candidate = value as { result?: string | number; text?: string };
+    if (typeof candidate.result === "number") return candidate.result;
+    if (typeof candidate.result === "string") {
+      const parsed = toNumber(candidate.result);
+      if (Number.isFinite(parsed) && parsed !== 0) return parsed;
+    }
+    if (typeof candidate.text === "string") {
+      const parsed = toNumber(candidate.text);
+      if (Number.isFinite(parsed) && parsed !== 0) return parsed;
+    }
+  }
+  const parsed = toNumber(getWorksheetCellText(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function classifyExpenseCategory(title: string): ExpenseRow["category"] {
+  const normalized = normalizeHeader(title);
+  if (
+    normalized.includes("растам") ||
+    normalized.includes("custom") ||
+    normalized.includes("cert") ||
+    normalized.includes("серт") ||
+    normalized.includes("оформ")
+  ) {
+    return "CUSTOMS";
+  }
+  if (normalized.includes("склад") || normalized.includes("хранен")) return "STORAGE";
+  if (
+    normalized.includes("транспорт") ||
+    normalized.includes("transport") ||
+    normalized.includes("достав") ||
+    normalized.includes("автопер") ||
+    normalized.includes("yo'lga")
+  ) {
+    return "TRANSPORT";
+  }
+  return "OTHER";
+}
+
 export function CreateContainerExcelPage({
   defaultRate,
   products,
@@ -109,6 +167,9 @@ export function CreateContainerExcelPage({
   const [search, setSearch] = useState("");
   const [nextKey, setNextKey] = useState(2);
   const [rows, setRows] = useState<GridRow[]>([]);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [excelMessage, setExcelMessage] = useState<string | null>(null);
+  const excelInputRef = useRef<HTMLInputElement | null>(null);
 
 
   const [nextInvestmentKey, setNextInvestmentKey] = useState(2);
@@ -288,6 +349,494 @@ export function CreateContainerExcelPage({
 
   function removeRow(key: number) {
     setRows((prev) => prev.filter((r) => r.key !== key));
+  }
+
+  async function importFromExcelFile(file: File) {
+    setExcelBusy(true);
+    setExcelMessage(null);
+    try {
+      const ExcelJSModule = await import("exceljs");
+      const workbook = new ExcelJSModule.Workbook();
+      const buffer = await file.arrayBuffer();
+      await workbook.xlsx.load(buffer);
+      const worksheet =
+        workbook.worksheets.find((sheet) => {
+          for (let rowNumber = 1; rowNumber <= Math.min(40, sheet.rowCount); rowNumber += 1) {
+            const row = sheet.getRow(rowNumber);
+            const values = Array.from({ length: Math.min(30, sheet.columnCount || 30) }, (_, index) =>
+              normalizeHeader(getWorksheetCellText(row.getCell(index + 1).value)),
+            );
+            if (values.includes("factori name") && values.includes("osso name") && values.includes("unit price")) return true;
+          }
+          return false;
+        }) ?? workbook.worksheets[0];
+      if (!worksheet) throw new Error("В файле нет листов.");
+
+      let headerRowNumber = -1;
+      for (let rowNumber = 1; rowNumber <= Math.min(40, worksheet.rowCount); rowNumber += 1) {
+        const row = worksheet.getRow(rowNumber);
+        const values = Array.from({ length: Math.min(30, worksheet.columnCount || 30) }, (_, index) =>
+          normalizeHeader(getWorksheetCellText(row.getCell(index + 1).value)),
+        );
+        if (values.includes("factori name") && values.includes("osso name") && values.includes("unit price")) {
+          headerRowNumber = rowNumber;
+          break;
+        }
+      }
+      if (headerRowNumber < 0) throw new Error("Не нашёл строку заголовков Excel.");
+
+      const headerValues = Array.from({ length: Math.min(40, worksheet.columnCount || 40) }, (_, index) =>
+        normalizeHeader(getWorksheetCellText(worksheet.getRow(headerRowNumber).getCell(index + 1).value)),
+      );
+      const findCol = (matcher: (value: string, index: number) => boolean) => {
+        const index = headerValues.findIndex((value, position) => matcher(value, position));
+        return index >= 0 ? index + 1 : 0;
+      };
+      const quantityCol = findCol((value) => value.includes("quantity"));
+      const amountCols = headerValues
+        .map((value, index) => ({ value, col: index + 1 }))
+        .filter(({ value }) => value.includes("total amount"))
+        .map(({ col }) => col);
+      const factoryNameCol = findCol((value) => value === "factori name");
+      const localNameCol = findCol((value) => value === "osso name");
+      const priceCnyCol = findCol((value) => value.includes("unit price"));
+      const sizeCol = findCol((value) => value === "saize" || value === "size");
+      const totalAmountCnyCol = amountCols.find((col) => col > quantityCol) ?? 0;
+      const cbmCol = findCol((value) => value === "cbm");
+      const kgCol = findCol((value) => value === "kg");
+      const totalCbmCol = findCol((value) => value.includes("total cbm"));
+      const totalNwKgsCol = findCol((value) => value.includes("total n.w. kgs"));
+
+      let exchangeRateFromSheet = 0;
+      for (let rowNumber = Math.max(1, headerRowNumber - 2); rowNumber <= Math.min(worksheet.rowCount, headerRowNumber + 1); rowNumber += 1) {
+        const row = worksheet.getRow(rowNumber);
+        for (let col = 1; col <= Math.min(30, worksheet.columnCount || 30); col += 1) {
+          const label = normalizeHeader(getWorksheetCellText(row.getCell(col).value));
+          if (label === "y - $" || label === "y-$") {
+            exchangeRateFromSheet =
+              getWorksheetCellNumber(worksheet.getRow(rowNumber + 1).getCell(col).value) ||
+              getWorksheetCellNumber(worksheet.getRow(rowNumber).getCell(col + 1).value);
+          }
+        }
+      }
+      if (!exchangeRateFromSheet) {
+        const rateCandidate = getWorksheetCellNumber(worksheet.getRow(headerRowNumber).getCell(14).value);
+        if (rateCandidate > 0 && rateCandidate < 100) exchangeRateFromSheet = rateCandidate;
+      }
+      const exchangeRateValue = exchangeRateFromSheet > 0 ? String(exchangeRateFromSheet) : rate;
+      const totalAmountUsdCol =
+        amountCols.find((col) => col > (totalNwKgsCol || totalCbmCol || kgCol || totalAmountCnyCol)) ?? 0;
+
+      const importedRows: GridRow[] = [];
+      let keySeed = 1;
+      for (let rowNumber = headerRowNumber + 1; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+        const row = worksheet.getRow(rowNumber);
+        const factoryName = factoryNameCol ? getWorksheetCellText(row.getCell(factoryNameCol).value) : "";
+        const localName = localNameCol ? getWorksheetCellText(row.getCell(localNameCol).value) : "";
+        const priceCNY = priceCnyCol ? getWorksheetCellText(row.getCell(priceCnyCol).value) : "";
+        const saize = sizeCol ? getWorksheetCellText(row.getCell(sizeCol).value) : "";
+        const quantity = quantityCol ? getWorksheetCellText(row.getCell(quantityCol).value) : "";
+        const totalAmountCNY = totalAmountCnyCol ? getWorksheetCellText(row.getCell(totalAmountCnyCol).value) : "";
+        const cbm = cbmCol ? getWorksheetCellText(row.getCell(cbmCol).value) : "";
+        const kg = kgCol ? getWorksheetCellText(row.getCell(kgCol).value) : "";
+        const totalCbm = totalCbmCol ? getWorksheetCellText(row.getCell(totalCbmCol).value) : "";
+        const nwKgs = totalNwKgsCol ? getWorksheetCellText(row.getCell(totalNwKgsCol).value) : "";
+        const totalAmountUSD = totalAmountUsdCol ? getWorksheetCellText(row.getCell(totalAmountUsdCol).value) : "";
+
+        const isEmpty = [factoryName, localName, priceCNY, quantity, totalAmountCNY, cbm, kg].every((value) => !String(value).trim());
+        if (isEmpty) continue;
+        if (normalizeHeader(factoryName) === "total" || normalizeHeader(localName) === "total") continue;
+
+        const draft: GridRow = {
+          key: keySeed++,
+          productId: "",
+          factoryName,
+          localName,
+          priceCNY,
+          saize,
+          color: "",
+          quantity,
+          totalAmountCNY,
+          cbm,
+          kg,
+          totalCbm,
+          nwKgs,
+          exchangeRate: exchangeRateValue || rate,
+          totalAmountUSD,
+        };
+
+        const hit = resolveProduct(draft);
+        if (hit) {
+          draft.productId = hit.id;
+          if (!draft.localName) draft.localName = hit.name;
+          if (!draft.factoryName) draft.factoryName = hit.sku;
+          if (!draft.saize) draft.saize = hit.size || "";
+          if (!draft.cbm && hit.cbm > 0) draft.cbm = String(hit.cbm);
+          if (!draft.kg && hit.kg > 0) draft.kg = String(hit.kg);
+        }
+        draft.totalAmountCNY = draft.totalAmountCNY || calcTotalAmountCny(draft);
+        draft.totalCbm = draft.totalCbm || calcTotalCbm(draft);
+        draft.nwKgs = draft.nwKgs || calcNwKgs(draft);
+        draft.totalAmountUSD = draft.totalAmountUSD || calcLineTotalUsd(draft);
+        importedRows.push(draft);
+      }
+
+      const importedInvestmentRows: InvestmentRow[] = [];
+      const pushInvestment = (investorName: string, investedAmountUSD: number, percentageShare = 0) => {
+        const name = investorName.trim();
+        if (!name) return;
+        const normalized = name.toLowerCase();
+        if (normalized === "total" || /^\d+(\.\d+)?$/.test(name)) return;
+        if (
+          importedInvestmentRows.some(
+            (row) => row.investorName.trim().toLowerCase() === normalized && toNumber(row.investedAmountUSD) === investedAmountUSD,
+          )
+        ) {
+          return;
+        }
+        const investor = investorByName.get(normalized);
+        importedInvestmentRows.push({
+          key: importedInvestmentRows.length + 1,
+          investorId: investor?.id ?? "",
+          investorName: name,
+          investedAmountUSD: investedAmountUSD > 0 ? String(Number(investedAmountUSD.toFixed(2))) : "",
+          percentageShare: percentageShare > 0 ? String(Number(percentageShare.toFixed(4))) : "",
+        });
+      };
+
+      const importedExpenseRows: ExpenseRow[] = [];
+      const pushExpense = (title: string, amountUSD: number, category?: ExpenseRow["category"], description = "") => {
+        const cleanTitle = title.trim();
+        if (!cleanTitle || !(amountUSD > 0)) return;
+        if (
+          importedExpenseRows.some(
+            (row) => row.title.trim().toLowerCase() === cleanTitle.toLowerCase() && Math.abs(toNumber(row.amountUSD) - amountUSD) < 0.001,
+          )
+        ) {
+          return;
+        }
+        importedExpenseRows.push({
+          key: importedExpenseRows.length + 1,
+          title: cleanTitle,
+          category: category ?? classifyExpenseCategory(cleanTitle),
+          amountUSD: String(Number(amountUSD.toFixed(2))),
+          description,
+        });
+      };
+
+      const investorsSheet =
+        workbook.getWorksheet("Инвесторы") ??
+        workbook.getWorksheet("Investors") ??
+        workbook.getWorksheet("INVESTORS");
+      if (investorsSheet) {
+        for (let rowNumber = 2; rowNumber <= investorsSheet.rowCount; rowNumber += 1) {
+          const row = investorsSheet.getRow(rowNumber);
+          const investorName = getWorksheetCellText(row.getCell(1).value);
+          const investedAmountUSD = getWorksheetCellNumber(row.getCell(2).value);
+          const percentageShare = getWorksheetCellNumber(row.getCell(3).value);
+          pushInvestment(investorName, investedAmountUSD, percentageShare);
+        }
+      }
+
+      const expensesSheet =
+        workbook.getWorksheet("Расходы") ??
+        workbook.getWorksheet("Expenses") ??
+        workbook.getWorksheet("EXPENSES");
+      if (expensesSheet) {
+        for (let rowNumber = 2; rowNumber <= expensesSheet.rowCount; rowNumber += 1) {
+          const row = expensesSheet.getRow(rowNumber);
+          const title = getWorksheetCellText(row.getCell(1).value);
+          const categoryText = getWorksheetCellText(row.getCell(2).value).toUpperCase();
+          const amountUSD = getWorksheetCellNumber(row.getCell(3).value);
+          const description = getWorksheetCellText(row.getCell(4).value);
+          const category = ["LOGISTICS", "CUSTOMS", "STORAGE", "TRANSPORT", "OTHER"].includes(categoryText)
+            ? (categoryText as ExpenseRow["category"])
+            : classifyExpenseCategory(title);
+          pushExpense(title, amountUSD, category, description);
+        }
+      }
+
+      const oldiSheet = workbook.getWorksheet("OLDI BERDI-OSSO-9");
+      if (oldiSheet) {
+        const yolga = getWorksheetCellNumber(oldiSheet.getCell("C4").value);
+        const rast = getWorksheetCellNumber(oldiSheet.getCell("D4").value);
+        const discountsAndExpenses = getWorksheetCellNumber(oldiSheet.getCell("H4").value);
+        pushExpense("Доставка (YO'LGA)", yolga, "LOGISTICS");
+        pushExpense("Растаможка", rast, "CUSTOMS");
+        pushExpense("Скидки и прочие расходы", discountsAndExpenses, "OTHER");
+
+        const investorNameRow = 7;
+        const investedTotalRow = 15;
+        let emptyNamesStreak = 0;
+        for (let col = 2; col <= Math.min(oldiSheet.columnCount || 30, 30); col += 1) {
+          const name = getWorksheetCellText(oldiSheet.getRow(investorNameRow).getCell(col).value).trim();
+          if (!name) {
+            emptyNamesStreak += 1;
+            if (emptyNamesStreak >= 6) break;
+            continue;
+          }
+          emptyNamesStreak = 0;
+          const investedAmountUSD = getWorksheetCellNumber(oldiSheet.getRow(investedTotalRow).getCell(col).value);
+          pushInvestment(name, investedAmountUSD, 0);
+        }
+      }
+
+      for (let rowNumber = Math.max(headerRowNumber + 1, 90); rowNumber <= Math.min(worksheet.rowCount, 150); rowNumber += 1) {
+        const title = getWorksheetCellText(worksheet.getRow(rowNumber).getCell(3).value);
+        const amountUSD = getWorksheetCellNumber(worksheet.getRow(rowNumber).getCell(5).value);
+        if (!title) continue;
+        if (normalizeHeader(title) === "курс") continue;
+        pushExpense(title, amountUSD, classifyExpenseCategory(title));
+      }
+
+      let purchaseTotalFromSheet = 0;
+      for (let rowNumber = headerRowNumber; rowNumber <= Math.min(worksheet.rowCount, headerRowNumber + 180); rowNumber += 1) {
+        const row = worksheet.getRow(rowNumber);
+        const texts = (Array.isArray(row.values) ? row.values : [])
+          .slice(1)
+          .map((value) => normalizeHeader(getWorksheetCellText(value)));
+        if (!texts.some((value) => value.includes("total"))) continue;
+        const nums = (Array.isArray(row.values) ? row.values : [])
+          .slice(1)
+          .map((value) => getWorksheetCellNumber(value))
+          .filter((value) => Number.isFinite(value) && value > 1000);
+        if (!nums.length) continue;
+        purchaseTotalFromSheet = Math.max(purchaseTotalFromSheet, ...nums);
+      }
+
+      const sheetName = file.name.replace(/\.xlsx$/i, "").trim();
+      if (!name.trim() && sheetName) setName(sheetName);
+      if (!purchaseCny.trim() && purchaseTotalFromSheet > 0) setPurchaseCny(String(Number(purchaseTotalFromSheet.toFixed(2))));
+      if (exchangeRateValue && !rate.trim()) setRate(exchangeRateValue);
+      setRows(importedRows);
+      setNextKey(importedRows.length + 1);
+      if (importedInvestmentRows.length) {
+        setInvestmentRows(importedInvestmentRows);
+        setNextInvestmentKey(importedInvestmentRows.length + 1);
+      }
+      if (importedExpenseRows.length) {
+        setExpenseRows(importedExpenseRows);
+        setNextExpenseKey(importedExpenseRows.length + 1);
+      }
+
+      const messageParts = [];
+      if (importedRows.length) messageParts.push(`товары: ${importedRows.length}`);
+      if (importedInvestmentRows.length) messageParts.push(`инвесторы: ${importedInvestmentRows.length}`);
+      if (importedExpenseRows.length) messageParts.push(`расходы: ${importedExpenseRows.length}`);
+      setExcelMessage(messageParts.length ? `Импортировано — ${messageParts.join(", ")}` : "В Excel не найдено данных для импорта.");
+    } catch (error) {
+      setExcelMessage(error instanceof Error ? error.message : "Не удалось импортировать Excel.");
+    } finally {
+      setExcelBusy(false);
+    }
+  }
+
+  async function exportToExcel() {
+    setExcelBusy(true);
+    setExcelMessage(null);
+    try {
+      const ExcelJSModule = await import("exceljs");
+      const workbook = new ExcelJSModule.Workbook();
+      const sheet = workbook.addWorksheet("Container");
+      const headers = [
+        "FACTORI NAME",
+        "OSSO NAME",
+        "PICTURE / 图片",
+        "UNIT PRICE",
+        "SAIZE",
+        "QUANTITY ( SET )",
+        "TOTAL AMOUNT",
+        "CBM",
+        "KG",
+        "TOTAL CBM",
+        "TOTAL N.W. KGS",
+        "DALEE",
+        "Y - $",
+        "TOTAL AMOUNT",
+      ];
+      sheet.addRow(headers);
+      for (const row of rows) {
+        const product = row.productId ? productMap.get(row.productId) ?? null : null;
+        sheet.addRow([
+          row.factoryName,
+          row.localName,
+          product?.imagePath ? "IMAGE" : "",
+          row.priceCNY,
+          row.saize,
+          row.quantity,
+          row.totalAmountCNY || calcTotalAmountCny(row),
+          row.cbm,
+          row.kg,
+          row.totalCbm || calcTotalCbm(row),
+          row.nwKgs || calcNwKgs(row),
+          "DALEE",
+          row.exchangeRate,
+          row.totalAmountUSD || calcLineTotalUsd(row),
+        ]);
+      }
+      sheet.columns.forEach((column, index) => {
+        const headerWidth = String(headers[index] ?? "").length + 4;
+        column.width = Math.max(14, headerWidth);
+      });
+
+      const investorsSheet = workbook.addWorksheet("Инвесторы");
+      investorsSheet.addRow(["Инвестор", "Вложено USD", "% доли"]);
+      for (const row of investmentRows) {
+        investorsSheet.addRow([row.investorName, row.investedAmountUSD, row.percentageShare]);
+      }
+      investorsSheet.columns = [{ width: 28 }, { width: 18 }, { width: 16 }];
+
+      const expensesSheet = workbook.addWorksheet("Расходы");
+      expensesSheet.addRow(["Название", "Категория", "Сумма USD", "Комментарий"]);
+      for (const row of expenseRows) {
+        expensesSheet.addRow([row.title, row.category, row.amountUSD, row.description]);
+      }
+      expensesSheet.columns = [{ width: 32 }, { width: 18 }, { width: 16 }, { width: 40 }];
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${name || "container-excel"}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setExcelMessage("Excel файл подготовлен.");
+    } catch (error) {
+      setExcelMessage(error instanceof Error ? error.message : "Не удалось скачать Excel.");
+    } finally {
+      setExcelBusy(false);
+    }
+  }
+
+  async function downloadTemplateExcel() {
+    setExcelBusy(true);
+    setExcelMessage(null);
+    try {
+      const ExcelJSModule = await import("exceljs");
+      const workbook = new ExcelJSModule.Workbook();
+      const sheet = workbook.addWorksheet("TRUCK ALL-1", {
+        views: [{ state: "frozen", ySplit: 6 }],
+      });
+
+      sheet.getCell("A1").value = "Шаблон контейнера";
+      sheet.getCell("A1").font = { bold: true, size: 16 };
+      sheet.mergeCells("A1:E1");
+
+      sheet.getCell("I5").value = "TOTAL AMOUNT";
+      sheet.getCell("J5").value = "TOTAL CBM";
+      sheet.getCell("K5").value = "TOTAL N.W. KGS";
+      sheet.getCell("M5").value = "Y - $";
+      sheet.getCell("N5").value = "TOTAL AMOUNT";
+
+      const headers = [
+        "FACTORI NAME",
+        "OSSO NAME",
+        "PICTURE / 图片",
+        "UNIT PRICE",
+        "SAIZE",
+        "QUANTITY ( SET )",
+        "TOTAL AMOUNT",
+        "CBM",
+        "KG",
+        "TOTAL CBM",
+        "TOTAL N.W. KGS",
+        "DALEE",
+        "Y - $",
+        "TOTAL AMOUNT",
+      ];
+      sheet.getRow(6).values = headers;
+
+      const exampleRows = [
+        ["FACTORY-001", "OSSO-001", "", 70, "610*480*160", 30, 2100, 0.055, 14, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", ""],
+        ["FACTORY-002", "OSSO-002", "", 80, "710*480*160", 20, 1600, 0.064, 16, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", ""],
+      ];
+      for (const values of exampleRows) sheet.addRow(values);
+
+      for (let rowNumber = 7; rowNumber <= 80; rowNumber += 1) {
+        const row = sheet.getRow(rowNumber);
+        if (!row.getCell(7).value) continue;
+        row.getCell(10).value = { formula: `F${rowNumber}*H${rowNumber}` };
+        row.getCell(11).value = { formula: `F${rowNumber}*I${rowNumber}` };
+        row.getCell(14).value = { formula: `G${rowNumber}*M${rowNumber}` };
+      }
+
+      sheet.getCell("I80").value = "TOTAL AMOUNT";
+      sheet.getCell("J80").value = "TOTAL CBM";
+      sheet.getCell("K80").value = "TOTAL N.W. KGS";
+      sheet.getCell("I81").value = { formula: "SUM(G7:G79)" };
+      sheet.getCell("J81").value = { formula: "SUM(J7:J79)" };
+      sheet.getCell("K81").value = { formula: "SUM(K7:K79)" };
+
+      const expensesSheet = workbook.addWorksheet("Расходы");
+      expensesSheet.addRow(["Название", "Категория", "Сумма USD", "Комментарий"]);
+      expensesSheet.addRow(["Растаможка", "CUSTOMS", "", ""]);
+      expensesSheet.addRow(["Доставка", "LOGISTICS", "", ""]);
+      expensesSheet.addRow(["Склад", "STORAGE", "", ""]);
+      expensesSheet.columns = [
+        { width: 32 },
+        { width: 18 },
+        { width: 16 },
+        { width: 40 },
+      ];
+
+      const investorsSheet = workbook.addWorksheet("Инвесторы");
+      investorsSheet.addRow(["Инвестор", "Вложено USD", "% доли"]);
+      investorsSheet.addRow(["OSSO", "", ""]);
+      investorsSheet.addRow(["AZIZ", "", ""]);
+      investorsSheet.columns = [
+        { width: 28 },
+        { width: 18 },
+        { width: 16 },
+      ];
+
+      sheet.getRow(6).eachCell({ includeEmpty: true }, (cell) => {
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FF94A3B8" } },
+          left: { style: "thin", color: { argb: "FF94A3B8" } },
+          bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+          right: { style: "thin", color: { argb: "FF94A3B8" } },
+        };
+      });
+
+      sheet.columns = [
+        { width: 24 },
+        { width: 24 },
+        { width: 16 },
+        { width: 14 },
+        { width: 22 },
+        { width: 16 },
+        { width: 16 },
+        { width: 12 },
+        { width: 12 },
+        { width: 14 },
+        { width: 16 },
+        { width: 12 },
+        { width: 12 },
+        { width: 16 },
+      ];
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "container-template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setExcelMessage("Шаблон Excel скачан.");
+    } catch (error) {
+      setExcelMessage(error instanceof Error ? error.message : "Не удалось скачать шаблон Excel.");
+    } finally {
+      setExcelBusy(false);
+    }
   }
 
 
@@ -613,7 +1162,6 @@ export function CreateContainerExcelPage({
     { id: "picture", label: "PICTURE / 图片", width: "min-w-[140px]" },
     { id: "priceCNY", label: "UNIT PRICE", width: "min-w-[170px]" },
     { id: "saize", label: "SAIZE", width: "min-w-[230px]" },
-    { id: "color", label: "Product color", width: "min-w-[220px]" },
     { id: "quantity", label: "QUANTITY ( SET )", width: "min-w-[170px]" },
     { id: "totalAmountCNY", label: "TOTAL AMOUNT", width: "min-w-[190px]" },
     { id: "cbm", label: "CBM", width: "min-w-[140px]" },
@@ -721,9 +1269,44 @@ export function CreateContainerExcelPage({
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
             <div>
               <h2 className="text-lg font-semibold tracking-[0.18em] text-slate-900">TRUCK ALL-1</h2>
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Main goods block</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Основная таблица товаров</p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importFromExcelFile(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => excelInputRef.current?.click()}
+                disabled={excelBusy}
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {excelBusy ? "Обработка..." : "Импорт Excel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportToExcel()}
+                disabled={excelBusy}
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Скачать Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadTemplateExcel()}
+                disabled={excelBusy}
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Скачать шаблон
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -743,6 +1326,9 @@ export function CreateContainerExcelPage({
               </button>
             </div>
           </div>
+          {excelMessage ? (
+            <div className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm text-slate-700">{excelMessage}</div>
+          ) : null}
           <div className="min-h-0 flex-1 overflow-auto bg-white">
             <div className="min-w-[2800px]">
               <table className="w-full border-separate border-spacing-0 border border-slate-400 text-left text-sm">
@@ -828,78 +1414,33 @@ export function CreateContainerExcelPage({
           </div>
         </article>
 
-        <article className="grid gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
-          <div className="overflow-auto rounded-xl border border-slate-400">
-            <div className="grid min-w-[980px] grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_1fr_1fr] text-center text-sm text-slate-800">
-              <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">SETS</div>
-              <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">RMB</div>
-              <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">USD</div>
-              <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">CBM</div>
-              <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL CBM</div>
-              <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">KG</div>
-              <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL N.W. KGS</div>
-
-              <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{productTotals.quantity || "—"}</div>
-              <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{productTotals.totalCny > 0 ? productTotals.totalCny.toFixed(2) : "—"}</div>
-              <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{productTotals.totalUsd > 0 ? productTotals.totalUsd.toFixed(2) : "—"}</div>
-              <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">—</div>
-              <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">{productTotals.totalCbm > 0 ? productTotals.totalCbm.toFixed(4) : "—"}</div>
-              <div className="border-r border-slate-300 px-3 py-4 text-2xl font-semibold">—</div>
-              <div className="px-3 py-4 text-2xl font-semibold">{productTotals.totalKg > 0 ? productTotals.totalKg.toFixed(3) : "—"}</div>
+        <article className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-900">Сводка контейнера</h3>
+              <p className="text-xs text-slate-500">Коротко и без лишних блоков.</p>
             </div>
           </div>
-
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
-            <div className="rounded-xl border border-slate-400">
-              <div className="grid grid-cols-[1.2fr_1fr_1fr] text-center text-sm">
-                <div className="border-b-2 border-r border-slate-400 px-3 py-3 text-xl font-semibold uppercase tracking-[0.18em]">KURS</div>
-                <div className="border-b-2 border-r border-slate-400 px-3 py-3 text-xl font-semibold uppercase tracking-[0.18em]">YO&#39;L GA</div>
-                <div className="border-b-2 border-slate-400 px-3 py-3 text-xl font-semibold uppercase tracking-[0.18em]">RASTAMOJKA</div>
-
-                <div className="border-r border-slate-300 px-3 py-4 text-4xl font-semibold">{rate || "—"}</div>
-                <div className="border-r border-slate-300 px-3 py-4 text-4xl font-semibold">{expenseTotals.road > 0 ? expenseTotals.road.toFixed(2) : "—"}</div>
-                <div className="px-3 py-4 text-4xl font-semibold">{expenseTotals.customs > 0 ? expenseTotals.customs.toFixed(2) : "—"}</div>
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {[
+              { label: "Товаров / Sets", value: productTotals.quantity || "—" },
+              { label: "Сумма RMB", value: productTotals.totalCny > 0 ? productTotals.totalCny.toFixed(2) : "—" },
+              { label: "Сумма USD", value: productTotals.totalUsd > 0 ? productTotals.totalUsd.toFixed(2) : "—" },
+              { label: "Общий CBM", value: productTotals.totalCbm > 0 ? productTotals.totalCbm.toFixed(4) : "—" },
+              { label: "Общий KG", value: productTotals.totalKg > 0 ? productTotals.totalKg.toFixed(3) : "—" },
+              { label: "Себестоимость 1 шт", value: summaryBlock.finalPerUnit > 0 ? summaryBlock.finalPerUnit.toFixed(2) : "—" },
+              { label: "Курс", value: rate || "—" },
+              { label: "Логистика", value: expenseTotals.road > 0 ? expenseTotals.road.toFixed(2) : "—" },
+              { label: "Растаможка", value: expenseTotals.customs > 0 ? expenseTotals.customs.toFixed(2) : "—" },
+              { label: "Инвестиции", value: investedTotal > 0 ? investedTotal.toFixed(2) : "—" },
+              { label: "Расходы", value: expenseTotals.all > 0 ? expenseTotals.all.toFixed(2) : "—" },
+              { label: "Остаток", value: summaryBlock.balance ? summaryBlock.balance.toFixed(2) : "0.00" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</div>
               </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-400">
-              <div className="grid grid-cols-[1fr_1fr_1fr_1fr] text-center text-sm">
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">TOTAL AMOUNT</div>
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold">ortacha birlik</div>
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-xs font-semibold">YOLGA VA Rastamojka</div>
-                <div className="border-b-2 border-slate-400 px-3 py-2 text-xs font-semibold uppercase tracking-[0.24em]">BIR DONASI</div>
-
-                <div className="border-r border-slate-300 px-3 py-3 text-3xl font-semibold">{productTotals.totalUsd > 0 ? productTotals.totalUsd.toFixed(2) : "—"}</div>
-                <div className="border-r border-slate-300 px-3 py-3 text-xl font-semibold">{summaryBlock.avgUnitUsd > 0 ? summaryBlock.avgUnitUsd.toFixed(2) : "—"}</div>
-                <div className="border-r border-slate-300 px-3 py-3 text-xl font-semibold">{summaryBlock.avgExpensePerUnit > 0 ? summaryBlock.avgExpensePerUnit.toFixed(2) : "—"}</div>
-                <div className="px-3 py-3 text-xl font-semibold">{summaryBlock.finalPerUnit > 0 ? summaryBlock.finalPerUnit.toFixed(2) : "—"}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <div className="rounded-xl border border-slate-400">
-              <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] text-center text-sm">
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 text-base font-semibold uppercase tracking-[0.18em]">TOLANGAN SUMMA</div>
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 font-semibold">Инвестиции</div>
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 font-semibold">Расходы</div>
-                <div className="border-b-2 border-slate-400 px-3 py-2 font-semibold">Остаток</div>
-
-                <div className="border-r border-slate-300 px-3 py-3 text-2xl font-semibold">{summaryBlock.grandTotalUsd > 0 ? summaryBlock.grandTotalUsd.toFixed(2) : "—"}</div>
-                <div className="border-r border-slate-300 px-3 py-3 text-2xl font-semibold">{investedTotal > 0 ? investedTotal.toFixed(2) : "—"}</div>
-                <div className="border-r border-slate-300 px-3 py-3 text-2xl font-semibold">{expenseTotals.all > 0 ? expenseTotals.all.toFixed(2) : "—"}</div>
-                <div className="px-3 py-3 text-2xl font-semibold">{summaryBlock.balance ? summaryBlock.balance.toFixed(2) : "0.00"}</div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-400">
-              <div className="grid grid-cols-2 text-center text-sm">
-                <div className="border-b-2 border-r border-slate-400 px-3 py-2 font-semibold uppercase tracking-[0.18em]">RMB</div>
-                <div className="border-b-2 border-slate-400 px-3 py-2 font-semibold uppercase tracking-[0.18em]">USD</div>
-                <div className="border-r border-slate-300 px-3 py-3 text-2xl font-semibold">{purchaseCny || "—"}</div>
-                <div className="px-3 py-3 text-2xl font-semibold">{productTotals.totalUsd > 0 ? productTotals.totalUsd.toFixed(2) : "—"}</div>
-              </div>
-            </div>
+            ))}
           </div>
         </article>
 
