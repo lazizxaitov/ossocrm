@@ -67,6 +67,11 @@ function calcTotalAmountUsd(row: Pick<GridRow, "quantity" | "priceCNY" | "totalA
   return "";
 }
 
+function formatValue(value: number, digits = 2) {
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  return value.toFixed(digits);
+}
+
 function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
   return {
     key,
@@ -93,6 +98,8 @@ function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
 
 export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageProps) {
   const [defaultRate, setDefaultRate] = useState("");
+  const [logisticsUsd, setLogisticsUsd] = useState("");
+  const [customsUsd, setCustomsUsd] = useState("");
   const [rows, setRows] = useState<GridRow[]>([
     makeEmptyRow(1, defaultRate),
     makeEmptyRow(2, defaultRate),
@@ -125,6 +132,8 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
       { products: 0, quantity: 0, totalAmountCNY: 0, totalAmountUSD: 0, totalCbm: 0, netWorthKgs: 0 },
     );
   }, [rows]);
+
+  const sharedExtraCostsUsd = useMemo(() => toNumber(logisticsUsd) + toNumber(customsUsd), [customsUsd, logisticsUsd]);
 
   function updateRow(key: number, patch: Partial<GridRow>) {
     setRows((prev) =>
@@ -182,6 +191,147 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
         return next;
       }),
     );
+  }
+
+  async function downloadTemplateExcel() {
+    setError("");
+    try {
+      const ExcelJS = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("TRUCK ALL-1", {
+        views: [{ state: "frozen", ySplit: 6 }],
+      });
+
+      sheet.getCell("A1").value = "Шаблон товаров";
+      sheet.getCell("A1").font = { bold: true, size: 16 };
+      sheet.mergeCells("A1:D1");
+
+      sheet.getCell("N2").value = "YO'LGA USD";
+      sheet.getCell("O2").value = toNumber(logisticsUsd) > 0 ? toNumber(logisticsUsd) : "";
+      sheet.getCell("P2").value = "RASTAMOJKA USD";
+      sheet.getCell("Q2").value = toNumber(customsUsd) > 0 ? toNumber(customsUsd) : "";
+
+      const headers = [
+        "FACTORI NAME",
+        "OSSO NAME",
+        "PICTURE / 图片",
+        "UNIT PRICE",
+        "SAIZE",
+        "Product color",
+        "QUANTITY ( SET )",
+        "TOTAL AMOUNT",
+        "CBM",
+        "KG",
+        "TOTAL CBM",
+        "TOTAL N.W. KGS",
+        "КУРС",
+        "Y - $",
+        "TOTAL AMOUNT",
+        "ortacha birlik",
+        "YOLGA VA Rastamojka ortacha birligi",
+        "BIR DONASI",
+        "JAMI",
+        "Категория",
+        "Описание",
+        "Цена продажи USD",
+      ];
+
+      sheet.getRow(6).values = headers;
+
+      const previewRows = rows.slice(0, 12);
+      for (const row of previewRows) {
+        sheet.addRow([
+          row.factoryName,
+          row.localName,
+          row.imageFile?.name ?? "",
+          row.priceCNY ? toNumber(row.priceCNY) : "",
+          row.size,
+          row.color,
+          row.quantity ? Math.max(0, Math.floor(toNumber(row.quantity))) : "",
+          row.totalAmountCNY ? toNumber(row.totalAmountCNY) : "",
+          row.cbm ? toNumber(row.cbm) : "",
+          row.kg ? toNumber(row.kg) : "",
+          row.totalCbm ? toNumber(row.totalCbm) : "",
+          row.netWorthKgs ? toNumber(row.netWorthKgs) : "",
+          row.exchangeRate ? toNumber(row.exchangeRate) : "",
+          "",
+          row.totalAmountUSD ? toNumber(row.totalAmountUSD) : "",
+          "",
+          "",
+          "",
+          "",
+          categoryOptions.find((option) => option.value === row.categoryId)?.label ?? "",
+          row.description,
+          row.salePriceUSD ? toNumber(row.salePriceUSD) : "",
+        ]);
+      }
+
+      for (let rowNumber = 7; rowNumber <= Math.max(18, sheet.rowCount); rowNumber += 1) {
+        sheet.getCell(`H${rowNumber}`).value = { formula: `IF(AND(D${rowNumber}>0,G${rowNumber}>0),D${rowNumber}*G${rowNumber},"")` };
+        sheet.getCell(`K${rowNumber}`).value = { formula: `IF(AND(I${rowNumber}>0,G${rowNumber}>0),I${rowNumber}*G${rowNumber},"")` };
+        sheet.getCell(`L${rowNumber}`).value = { formula: `IF(AND(J${rowNumber}>0,G${rowNumber}>0),J${rowNumber}*G${rowNumber},"")` };
+        sheet.getCell(`N${rowNumber}`).value = { formula: `IF(AND(D${rowNumber}>0,M${rowNumber}>0),D${rowNumber}*M${rowNumber},"")` };
+        sheet.getCell(`O${rowNumber}`).value = { formula: `IF(AND(H${rowNumber}>0,M${rowNumber}>0),H${rowNumber}*M${rowNumber},"")` };
+        sheet.getCell(`P${rowNumber}`).value = { formula: `IF($O$20=0,"",O${rowNumber}/$O$20*100)` };
+        sheet.getCell(`Q${rowNumber}`).value = { formula: `IF($R$20=0,"",P${rowNumber}/100*$R$20)` };
+        sheet.getCell(`R${rowNumber}`).value = { formula: `IF(G${rowNumber}=0,"",(O${rowNumber}+Q${rowNumber})/G${rowNumber})` };
+        sheet.getCell(`S${rowNumber}`).value = { formula: `IF(O${rowNumber}=0,"",O${rowNumber}+Q${rowNumber})` };
+      }
+
+      sheet.getCell("O20").value = { formula: "SUM(O7:O19)" };
+      sheet.getCell("R20").value = { formula: "O2+Q2" };
+
+      sheet.columns = [
+        { width: 24 },
+        { width: 24 },
+        { width: 16 },
+        { width: 14 },
+        { width: 18 },
+        { width: 18 },
+        { width: 16 },
+        { width: 16 },
+        { width: 12 },
+        { width: 12 },
+        { width: 14 },
+        { width: 16 },
+        { width: 12 },
+        { width: 12 },
+        { width: 16 },
+        { width: 16 },
+        { width: 22 },
+        { width: 16 },
+        { width: 16 },
+        { width: 18 },
+        { width: 28 },
+        { width: 18 },
+      ];
+
+      sheet.getRow(6).eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FF94A3B8" } },
+          left: { style: "thin", color: { argb: "FF94A3B8" } },
+          bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+          right: { style: "thin", color: { argb: "FF94A3B8" } },
+        };
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "products-template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccess("Шаблон Excel скачан.");
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Ошибка скачивания шаблона Excel.");
+    }
   }
 
   async function submitRows() {
@@ -295,12 +445,37 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
         >
           Применить курс ко всем
         </button>
+        <input
+          value={logisticsUsd}
+          onChange={(event) => setLogisticsUsd(event.target.value)}
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="YO'LGA USD"
+          className="w-36 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700"
+        />
+        <input
+          value={customsUsd}
+          onChange={(event) => setCustomsUsd(event.target.value)}
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="RASTAMOJKA USD"
+          className="w-40 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700"
+        />
         <button
           type="button"
           onClick={addRow}
           className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           Добавить строку
+        </button>
+        <button
+          type="button"
+          onClick={() => void downloadTemplateExcel()}
+          className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Скачать шаблон Excel
         </button>
         <button
           type="button"
@@ -327,7 +502,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
       </div>
 
       <div ref={tableWrapRef} className="min-h-0 overflow-auto rounded-xl border border-slate-400">
-        <table className="min-w-[2850px] w-full border-separate border-spacing-0 text-left text-sm">
+        <table className="min-w-[3650px] w-full border-separate border-spacing-0 text-left text-sm">
           <thead className="sticky top-0 z-10 bg-white text-slate-800">
             <tr>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">FACTORI NAME</th>
@@ -342,8 +517,13 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">KG</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL CBM</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL N.W. KGS</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">КУРС</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">Y - $</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">ortacha birlik</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">YOLGA VA Rastamojka ortacha birligi</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">BIR DONASI</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">JAMI</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Категория</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Описание</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Цена продажи USD</th>
@@ -352,7 +532,15 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+              const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcTotalAmountUsd(row));
+              const unitUsd = toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0 ? toNumber(row.priceCNY) * toNumber(row.exchangeRate) : 0;
+              const averagePercent = totals.totalAmountUSD > 0 ? (totalAmountUsd / totals.totalAmountUSD) * 100 : 0;
+              const logisticsAverage = sharedExtraCostsUsd > 0 ? (sharedExtraCostsUsd * averagePercent) / 100 : 0;
+              const birDonasi = quantity > 0 ? (totalAmountUsd + logisticsAverage) / quantity : 0;
+              const jami = totalAmountUsd + logisticsAverage;
+              return (
               <tr key={row.key} className="align-top text-slate-800">
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <input
@@ -478,6 +666,9 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     className="w-28 rounded border border-[var(--border)] px-2 py-2"
                   />
                 </td>
+                <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(unitUsd)}
+                </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <input
                     value={row.totalAmountUSD}
@@ -487,6 +678,18 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                     step="0.01"
                     className="w-36 rounded border border-[var(--border)] px-2 py-2"
                   />
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(averagePercent)}{averagePercent > 0 ? "%" : ""}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(logisticsAverage)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(birDonasi)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(jami)}
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <select
@@ -536,7 +739,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                   </button>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>

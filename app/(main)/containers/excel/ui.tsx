@@ -144,6 +144,11 @@ function classifyExpenseCategory(title: string): ExpenseRow["category"] {
   return "OTHER";
 }
 
+function formatSheetValue(value: number, digits = 2) {
+  if (!Number.isFinite(value) || value === 0) return "—";
+  return value.toFixed(digits);
+}
+
 export function CreateContainerExcelPage({
   defaultRate,
   products,
@@ -293,6 +298,51 @@ export function CreateContainerExcelPage({
       balance,
     };
   }, [expenseTotals.all, investedTotal, productTotals.quantity, productTotals.totalUsd]);
+
+  const purchaseCnyValue = useMemo(() => {
+    const manual = toNumber(purchaseCny);
+    return manual > 0 ? manual : productTotals.totalCny;
+  }, [productTotals.totalCny, purchaseCny]);
+
+  const summaryRow = useMemo(
+    () => [
+      { label: "SETS", value: productTotals.quantity > 0 ? String(productTotals.quantity) : "—" },
+      { label: "RMB", value: formatSheetValue(purchaseCnyValue, 2) },
+      { label: "USD", value: formatSheetValue(productTotals.totalUsd, 2) },
+      { label: "CBM", value: formatSheetValue(productTotals.totalCbm, 4) },
+      { label: "TOTAL CBM", value: formatSheetValue(productTotals.totalCbm, 4) },
+      { label: "KG", value: formatSheetValue(productTotals.totalKg, 3) },
+      { label: "TOTAL N.W. KGS", value: formatSheetValue(productTotals.totalKg, 3) },
+      { label: "KURS", value: rate || "—" },
+      { label: "YO'L GA", value: formatSheetValue(expenseTotals.road, 2) },
+      { label: "RASTAMOJKA", value: formatSheetValue(expenseTotals.customs, 2) },
+      { label: "TOTAL AMOUNT", value: formatSheetValue(summaryBlock.grandTotalUsd, 2) },
+      { label: "ortacha birlik", value: formatSheetValue(summaryBlock.avgUnitUsd, 4) },
+      { label: "YOLGA VA Rastamojka ortacha birligi", value: formatSheetValue(summaryBlock.avgExpensePerUnit, 4) },
+      { label: "BIR DONASI", value: formatSheetValue(summaryBlock.finalPerUnit, 4) },
+      { label: "TOLANGAN SUMMA", value: formatSheetValue(investedTotal, 2) },
+      { label: "Инвестиции", value: formatSheetValue(investedTotal, 2) },
+      { label: "Расходы", value: formatSheetValue(expenseTotals.all, 2) },
+      { label: "Остаток", value: summaryBlock.balance.toFixed(2) },
+    ],
+    [
+      expenseTotals.all,
+      expenseTotals.customs,
+      expenseTotals.road,
+      investedTotal,
+      productTotals.quantity,
+      productTotals.totalCbm,
+      productTotals.totalKg,
+      productTotals.totalUsd,
+      purchaseCnyValue,
+      rate,
+      summaryBlock.avgExpensePerUnit,
+      summaryBlock.avgUnitUsd,
+      summaryBlock.balance,
+      summaryBlock.finalPerUnit,
+      summaryBlock.grandTotalUsd,
+    ],
+  );
 
   function resolveProduct(row: Pick<GridRow, "factoryName" | "localName">) {
     const factoryKey = String(row.factoryName ?? "").trim().toLowerCase();
@@ -651,12 +701,28 @@ export function CreateContainerExcelPage({
         "TOTAL CBM",
         "TOTAL N.W. KGS",
         "DALEE",
+        "КУРС",
         "Y - $",
         "TOTAL AMOUNT",
+        "ortacha birlik",
+        "YOLGA VA Rastamojka ortacha birligi",
+        "BIR DONASI",
+        "JAMI",
       ];
       sheet.addRow(headers);
+      const totalLogisticsAndCustoms = expenseTotals.road + expenseTotals.customs;
       for (const row of rows) {
         const product = row.productId ? productMap.get(row.productId) ?? null : null;
+        const quantityValue = Math.max(0, Math.floor(toNumber(row.quantity)));
+        const unitUsdValue =
+          toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0
+            ? toNumber(row.priceCNY) * toNumber(row.exchangeRate)
+            : (product?.costPriceUSD ?? 0);
+        const totalAmountUsdValue = toNumber(row.totalAmountUSD) || toNumber(calcLineTotalUsd(row));
+        const averagePercentValue = productTotals.totalUsd > 0 ? (totalAmountUsdValue / productTotals.totalUsd) * 100 : 0;
+        const logisticsAverageValue = totalLogisticsAndCustoms > 0 ? (totalLogisticsAndCustoms * averagePercentValue) / 100 : 0;
+        const perUnitTotalValue = quantityValue > 0 ? (totalAmountUsdValue + logisticsAverageValue) / quantityValue : 0;
+        const grandTotalValue = totalAmountUsdValue + logisticsAverageValue;
         sheet.addRow([
           row.factoryName,
           row.localName,
@@ -671,7 +737,12 @@ export function CreateContainerExcelPage({
           row.nwKgs || calcNwKgs(row),
           "DALEE",
           row.exchangeRate,
-          row.totalAmountUSD || calcLineTotalUsd(row),
+          unitUsdValue > 0 ? Number(unitUsdValue.toFixed(2)) : "",
+          totalAmountUsdValue > 0 ? Number(totalAmountUsdValue.toFixed(2)) : "",
+          averagePercentValue > 0 ? Number(averagePercentValue.toFixed(2)) : "",
+          logisticsAverageValue > 0 ? Number(logisticsAverageValue.toFixed(2)) : "",
+          perUnitTotalValue > 0 ? Number(perUnitTotalValue.toFixed(2)) : "",
+          grandTotalValue > 0 ? Number(grandTotalValue.toFixed(2)) : "",
         ]);
       }
       sheet.columns.forEach((column, index) => {
@@ -720,6 +791,7 @@ export function CreateContainerExcelPage({
       const sheet = workbook.addWorksheet("TRUCK ALL-1", {
         views: [{ state: "frozen", ySplit: 6 }],
       });
+      const totalLogisticsAndCustoms = expenseTotals.road + expenseTotals.customs;
 
       sheet.getCell("A1").value = "Шаблон контейнера";
       sheet.getCell("A1").font = { bold: true, size: 16 };
@@ -728,8 +800,12 @@ export function CreateContainerExcelPage({
       sheet.getCell("I5").value = "TOTAL AMOUNT";
       sheet.getCell("J5").value = "TOTAL CBM";
       sheet.getCell("K5").value = "TOTAL N.W. KGS";
-      sheet.getCell("M5").value = "Y - $";
-      sheet.getCell("N5").value = "TOTAL AMOUNT";
+      sheet.getCell("N5").value = "Y - $";
+      sheet.getCell("O5").value = "TOTAL AMOUNT";
+      sheet.getCell("P5").value = "ortacha birlik";
+      sheet.getCell("Q5").value = "YOLGA VA Rastamojka ortacha birligi";
+      sheet.getCell("R5").value = "BIR DONASI";
+      sheet.getCell("S5").value = "JAMI";
 
       const headers = [
         "FACTORI NAME",
@@ -744,14 +820,19 @@ export function CreateContainerExcelPage({
         "TOTAL CBM",
         "TOTAL N.W. KGS",
         "DALEE",
+        "КУРС",
         "Y - $",
         "TOTAL AMOUNT",
+        "ortacha birlik",
+        "YOLGA VA Rastamojka ortacha birligi",
+        "BIR DONASI",
+        "JAMI",
       ];
       sheet.getRow(6).values = headers;
 
       const exampleRows = [
-        ["FACTORY-001", "OSSO-001", "", 70, "610*480*160", 30, 2100, 0.055, 14, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", ""],
-        ["FACTORY-002", "OSSO-002", "", 80, "710*480*160", 20, 1600, 0.064, 16, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", ""],
+        ["FACTORY-001", "OSSO-001", "", 70, "610*480*160", 30, 2100, 0.055, 14, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", "", "", "", "", "", ""],
+        ["FACTORY-002", "OSSO-002", "", 80, "710*480*160", 20, 1600, 0.064, 16, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", "", "", "", "", "", ""],
       ];
       for (const values of exampleRows) sheet.addRow(values);
 
@@ -760,15 +841,24 @@ export function CreateContainerExcelPage({
         if (!row.getCell(7).value) continue;
         row.getCell(10).value = { formula: `F${rowNumber}*H${rowNumber}` };
         row.getCell(11).value = { formula: `F${rowNumber}*I${rowNumber}` };
-        row.getCell(14).value = { formula: `G${rowNumber}*M${rowNumber}` };
+        row.getCell(14).value = { formula: `D${rowNumber}*M${rowNumber}` };
+        row.getCell(15).value = { formula: `G${rowNumber}*M${rowNumber}` };
+        row.getCell(16).value = { formula: `IF($O$81=0,0,O${rowNumber}/$O$81*100)` };
+        row.getCell(17).value = { formula: `P${rowNumber}/100*$Q$81` };
+        row.getCell(18).value = { formula: `IF(G${rowNumber}=0,0,(O${rowNumber}+Q${rowNumber})/G${rowNumber})` };
+        row.getCell(19).value = { formula: `O${rowNumber}+Q${rowNumber}` };
       }
 
       sheet.getCell("I80").value = "TOTAL AMOUNT";
       sheet.getCell("J80").value = "TOTAL CBM";
       sheet.getCell("K80").value = "TOTAL N.W. KGS";
+      sheet.getCell("O80").value = "TOTAL AMOUNT";
+      sheet.getCell("Q80").value = "YOLGA + RASTAMOJKA";
       sheet.getCell("I81").value = { formula: "SUM(G7:G79)" };
       sheet.getCell("J81").value = { formula: "SUM(J7:J79)" };
       sheet.getCell("K81").value = { formula: "SUM(K7:K79)" };
+      sheet.getCell("O81").value = { formula: "SUM(O7:O79)" };
+      sheet.getCell("Q81").value = totalLogisticsAndCustoms > 0 ? Number(totalLogisticsAndCustoms.toFixed(2)) : 0;
 
       const expensesSheet = workbook.addWorksheet("Расходы");
       expensesSheet.addRow(["Название", "Категория", "Сумма USD", "Комментарий"]);
@@ -818,6 +908,11 @@ export function CreateContainerExcelPage({
         { width: 16 },
         { width: 12 },
         { width: 12 },
+        { width: 16 },
+        { width: 16 },
+        { width: 18 },
+        { width: 20 },
+        { width: 16 },
         { width: 16 },
       ];
 
@@ -1156,10 +1251,29 @@ export function CreateContainerExcelPage({
     });
   }
 
-  const columns: Array<{ id: keyof GridRow | "picture"; label: string; width: string }> = [
+  const columns: Array<{
+    id:
+      | keyof GridRow
+      | "picture"
+      | "productTotal"
+      | "costPriceUSD"
+      | "salePriceUSD"
+      | "saleTotalUSD"
+      | "unitUsd"
+      | "averagePercent"
+      | "logisticsAverage"
+      | "perUnitTotal"
+      | "grandTotal";
+    label: string;
+    width: string;
+  }> = [
     { id: "factoryName", label: "FACTORI NAME", width: "min-w-[250px]" },
-    { id: "localName", label: "OSSO NAME", width: "min-w-[250px]" },
+    { id: "localName", label: "OSSO NAME", width: "min-w-[180px]" },
     { id: "picture", label: "PICTURE / 图片", width: "min-w-[140px]" },
+    { id: "productTotal", label: "ОБЩАЯ СУММА ТОВАРА", width: "min-w-[180px]" },
+    { id: "costPriceUSD", label: "СЕБЕСТОИМОСТЬ", width: "min-w-[170px]" },
+    { id: "salePriceUSD", label: "ЦЕНА ПРОДАЖИ", width: "min-w-[170px]" },
+    { id: "saleTotalUSD", label: "ОБЩЕЕ ПО КОЛИЧЕСТВУ", width: "min-w-[190px]" },
     { id: "priceCNY", label: "UNIT PRICE", width: "min-w-[170px]" },
     { id: "saize", label: "SAIZE", width: "min-w-[230px]" },
     { id: "quantity", label: "QUANTITY ( SET )", width: "min-w-[170px]" },
@@ -1168,8 +1282,13 @@ export function CreateContainerExcelPage({
     { id: "kg", label: "KG", width: "min-w-[140px]" },
     { id: "totalCbm", label: "TOTAL CBM", width: "min-w-[170px]" },
     { id: "nwKgs", label: "TOTAL N.W. KGS", width: "min-w-[190px]" },
-    { id: "exchangeRate", label: "Y - $", width: "min-w-[150px]" },
+    { id: "exchangeRate", label: "КУРС", width: "min-w-[120px]" },
+    { id: "unitUsd", label: "Y - $", width: "min-w-[150px]" },
     { id: "totalAmountUSD", label: "TOTAL AMOUNT", width: "min-w-[180px]" },
+    { id: "averagePercent", label: "ortacha birlik", width: "min-w-[160px]" },
+    { id: "logisticsAverage", label: "YOLGA VA Rastamojka ortacha birligi", width: "min-w-[210px]" },
+    { id: "perUnitTotal", label: "BIR DONASI", width: "min-w-[150px]" },
+    { id: "grandTotal", label: "JAMI", width: "min-w-[150px]" },
   ];
 
   const investmentColumns: Array<{ id: keyof InvestmentRow; label: string; width: string }> = [
@@ -1187,13 +1306,13 @@ export function CreateContainerExcelPage({
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-4">
-      <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
+      <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
         <form action={formAction} className="grid gap-3">
         <input type="hidden" name="investmentsJson" value={investmentsJson} />
         <input type="hidden" name="expensesJson" value={expensesJson} />
         <input type="hidden" name="containerItemsJson" value={containerItemsJson} />
 
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 xl:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))_auto]">
           <input
             name="name"
             required
@@ -1238,28 +1357,17 @@ export function CreateContainerExcelPage({
             placeholder="Курс CNY → USD"
             className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
           />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {isPending ? "Сохранение..." : "Сохранить"}
           </button>
         </div>
 
-        {state.error ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {state.error}
-          </p>
-        ) : null}
-        {state.success ? (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            Контейнер создан.
-          </p>
-        ) : null}
+        {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
+        {state.success ? <p className="text-sm text-emerald-700">Контейнер создан.</p> : null}
 
         </form>
       </article>
@@ -1348,7 +1456,33 @@ export function CreateContainerExcelPage({
               <tbody>
                 {rows.map((r, rowIndex) => {
                   const product = r.productId ? productMap.get(r.productId) ?? null : null;
-                  const pasteableCols = columns.filter((c) => c.id !== "picture");
+                  const pasteableCols = columns.filter(
+                    (c) =>
+                      c.id !== "picture" &&
+                      c.id !== "productTotal" &&
+                      c.id !== "costPriceUSD" &&
+                      c.id !== "salePriceUSD" &&
+                      c.id !== "saleTotalUSD" &&
+                      c.id !== "unitUsd" &&
+                      c.id !== "averagePercent" &&
+                      c.id !== "logisticsAverage" &&
+                      c.id !== "perUnitTotal" &&
+                      c.id !== "grandTotal",
+                  );
+                  const quantityValue = Math.max(0, Math.floor(toNumber(r.quantity)));
+                  const totalLogisticsAndCustoms = expenseTotals.road + expenseTotals.customs;
+                  const costPriceUsdValue =
+                    toNumber(r.priceCNY) > 0 && toNumber(r.exchangeRate) > 0
+                      ? toNumber(r.priceCNY) * toNumber(r.exchangeRate)
+                      : (product?.costPriceUSD ?? 0);
+                  const unitUsdValue = costPriceUsdValue;
+                  const productTotalValue = toNumber(r.totalAmountUSD) || toNumber(calcLineTotalUsd(r));
+                  const salePriceUsdValue = product?.basePriceUSD ?? 0;
+                  const saleTotalUsdValue = quantityValue > 0 && salePriceUsdValue > 0 ? salePriceUsdValue * quantityValue : 0;
+                  const averagePercentValue = productTotals.totalUsd > 0 ? (productTotalValue / productTotals.totalUsd) * 100 : 0;
+                  const logisticsAverageValue = totalLogisticsAndCustoms > 0 ? (totalLogisticsAndCustoms * averagePercentValue) / 100 : 0;
+                  const grandTotalValue = productTotalValue + logisticsAverageValue;
+                  const perUnitTotalValue = quantityValue > 0 ? grandTotalValue / quantityValue : 0;
 
                   return (
                     <tr key={r.key}>
@@ -1367,6 +1501,42 @@ export function CreateContainerExcelPage({
                               ) : (
                                 <div className="h-14 w-14 rounded-sm border border-dashed border-slate-300 bg-white" />
                               )}
+                            </td>
+                          );
+                        }
+                        if (
+                          c.id === "productTotal" ||
+                          c.id === "costPriceUSD" ||
+                          c.id === "salePriceUSD" ||
+                          c.id === "saleTotalUSD" ||
+                          c.id === "unitUsd" ||
+                          c.id === "averagePercent" ||
+                          c.id === "logisticsAverage" ||
+                          c.id === "perUnitTotal" ||
+                          c.id === "grandTotal"
+                        ) {
+                          const value = Number(
+                            c.id === "productTotal"
+                              ? productTotalValue
+                              : c.id === "costPriceUSD"
+                                ? costPriceUsdValue
+                                : c.id === "salePriceUSD"
+                                  ? salePriceUsdValue
+                                  : c.id === "saleTotalUSD"
+                                    ? saleTotalUsdValue
+                                    : c.id === "unitUsd"
+                                      ? unitUsdValue
+                                      : c.id === "averagePercent"
+                                        ? averagePercentValue
+                                        : c.id === "logisticsAverage"
+                                          ? logisticsAverageValue
+                                          : c.id === "perUnitTotal"
+                                            ? perUnitTotalValue
+                                            : grandTotalValue,
+                          );
+                          return (
+                            <td key={c.id} className="border-b border-r border-slate-300 bg-slate-50 px-3 py-3 text-center text-[15px] font-medium text-slate-700">
+                              {value > 0 ? `${value.toFixed(2)}${c.id === "averagePercent" ? "%" : ""}` : "—"}
                             </td>
                           );
                         }
@@ -1414,33 +1584,34 @@ export function CreateContainerExcelPage({
           </div>
         </article>
 
-        <article className="grid gap-3 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-900">Сводка контейнера</h3>
-              <p className="text-xs text-slate-500">Коротко и без лишних блоков.</p>
-            </div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-            {[
-              { label: "Товаров / Sets", value: productTotals.quantity || "—" },
-              { label: "Сумма RMB", value: productTotals.totalCny > 0 ? productTotals.totalCny.toFixed(2) : "—" },
-              { label: "Сумма USD", value: productTotals.totalUsd > 0 ? productTotals.totalUsd.toFixed(2) : "—" },
-              { label: "Общий CBM", value: productTotals.totalCbm > 0 ? productTotals.totalCbm.toFixed(4) : "—" },
-              { label: "Общий KG", value: productTotals.totalKg > 0 ? productTotals.totalKg.toFixed(3) : "—" },
-              { label: "Себестоимость 1 шт", value: summaryBlock.finalPerUnit > 0 ? summaryBlock.finalPerUnit.toFixed(2) : "—" },
-              { label: "Курс", value: rate || "—" },
-              { label: "Логистика", value: expenseTotals.road > 0 ? expenseTotals.road.toFixed(2) : "—" },
-              { label: "Растаможка", value: expenseTotals.customs > 0 ? expenseTotals.customs.toFixed(2) : "—" },
-              { label: "Инвестиции", value: investedTotal > 0 ? investedTotal.toFixed(2) : "—" },
-              { label: "Расходы", value: expenseTotals.all > 0 ? expenseTotals.all.toFixed(2) : "—" },
-              { label: "Остаток", value: summaryBlock.balance ? summaryBlock.balance.toFixed(2) : "0.00" },
-            ].map((item) => (
-              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</div>
-              </div>
-            ))}
+        <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[2600px] border-separate border-spacing-0 text-center">
+              <thead>
+                <tr className="bg-slate-50">
+                  {summaryRow.map((item) => (
+                    <th
+                      key={item.label}
+                      className="border-b border-r border-slate-400 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 last:border-r-0"
+                    >
+                      {item.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {summaryRow.map((item) => (
+                    <td
+                      key={item.label}
+                      className="border-r border-slate-300 px-3 py-3 text-base font-semibold text-slate-900 last:border-r-0"
+                    >
+                      {item.value}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
           </div>
         </article>
 
@@ -1648,23 +1819,43 @@ export function CreateContainerExcelPage({
               className="mt-3 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
             />
             <div className="mt-3 max-h-[60vh] overflow-auto rounded-xl border border-[var(--border)]">
-              {filteredProducts.map((p) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  onClick={() => {
-                    addProduct(p);
-                    setPickerOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between gap-3 border-b border-[var(--border)] px-3 py-2 text-left text-sm hover:bg-slate-50"
-                >
-                  <span className="truncate font-medium text-slate-800">
-                    {p.sku} — {p.name}
-                  </span>
-                  <span className="shrink-0 text-xs text-slate-500">{p.categoryName}</span>
-                </button>
-              ))}
-              {!filteredProducts.length ? <p className="px-3 py-3 text-sm text-slate-500">Ничего не найдено.</p> : null}
+              <div className="min-w-[1100px]">
+                <div className="grid grid-cols-[120px_180px_140px_140px_140px_160px_1fr_120px] border-b border-[var(--border)] bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                  <span>SKU</span>
+                  <span>Название</span>
+                  <span>Общая сумма</span>
+                  <span>Себестоимость</span>
+                  <span>Цена продажи</span>
+                  <span>Общее по кол.</span>
+                  <span>Размер</span>
+                  <span>Категория</span>
+                </div>
+                {filteredProducts.map((p) => {
+                  const costTotal = p.costPriceUSD > 0 ? p.costPriceUSD : 0;
+                  const saleTotal = p.basePriceUSD > 0 ? p.basePriceUSD : 0;
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => {
+                        addProduct(p);
+                        setPickerOpen(false);
+                      }}
+                      className="grid w-full grid-cols-[120px_180px_140px_140px_140px_160px_1fr_120px] items-center gap-3 border-b border-[var(--border)] px-3 py-3 text-left text-sm hover:bg-slate-50"
+                    >
+                      <span className="truncate font-medium text-slate-800">{p.sku}</span>
+                      <span className="truncate text-slate-800">{p.name}</span>
+                      <span className="text-slate-700">{costTotal > 0 ? costTotal.toFixed(2) : "—"}</span>
+                      <span className="text-slate-700">{p.costPriceUSD > 0 ? p.costPriceUSD.toFixed(2) : "—"}</span>
+                      <span className="text-slate-700">{p.basePriceUSD > 0 ? p.basePriceUSD.toFixed(2) : "—"}</span>
+                      <span className="text-slate-700">{saleTotal > 0 ? saleTotal.toFixed(2) : "—"}</span>
+                      <span className="truncate text-slate-600">{p.size || "—"}</span>
+                      <span className="truncate text-xs text-slate-500">{p.categoryName}</span>
+                    </button>
+                  );
+                })}
+                {!filteredProducts.length ? <p className="px-3 py-3 text-sm text-slate-500">Ничего не найдено.</p> : null}
+              </div>
             </div>
           </div>
         </div>
