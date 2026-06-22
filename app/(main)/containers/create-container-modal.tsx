@@ -86,6 +86,16 @@ function recalcTotalCbm(row: ItemRow) {
   return "";
 }
 
+function calcItemTotalUsd(row: Pick<ItemRow, "quantity" | "unitPriceUSD" | "lineTotalUSD">) {
+  const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+  const unitPriceUSD = toNumber(row.unitPriceUSD);
+  if (quantity > 0 && unitPriceUSD > 0) {
+    return quantity * unitPriceUSD;
+  }
+  const manualTotal = toNumber(row.lineTotalUSD);
+  return manualTotal > 0 ? manualTotal : 0;
+}
+
 function recalcDraftDerived(row: ExcelDraftRow) {
   const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
   const priceCNY = toNumber(row.priceCNY);
@@ -1165,8 +1175,9 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                 }`}
               >
                 <p className="mb-2 text-sm font-medium text-slate-800">Добавленные товары</p>
-                <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
+                <div className="mb-2 hidden grid-cols-[minmax(160px,2fr)_120px_96px_64px_96px_96px_84px] gap-1.5 px-1 text-[11px] font-medium text-slate-500 md:grid">
                   <p>Товар</p>
+                  <p>Общая сумма</p>
                   <p>Размер</p>
                   <p>Количество (QTY)</p>
                   <p>Товар</p>
@@ -1176,11 +1187,15 @@ export function CreateContainerModal({ defaultRate, investors, products }: Creat
                 <div className="min-h-0 flex-1 space-y-2 overflow-auto">
 	                  {itemRows.map((row) => {
 	                    const productName = localProducts.find((product) => product.id === row.productId)?.name ?? "";
+                      const itemTotalUsd = calcItemTotalUsd(row);
 	                    return (
                       <div key={row.key} className="rounded-lg border border-[var(--border)] bg-white p-2">
-                        <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_96px_64px_96px_96px_84px]">
+                        <div className="grid items-center gap-1.5 md:grid-cols-[minmax(160px,2fr)_120px_96px_64px_96px_96px_84px]">
                           <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm text-slate-700">
                             {productName || "—"}
+                          </div>
+                          <div className="rounded border border-[var(--border)] bg-slate-50 px-2 py-2 text-sm font-medium text-slate-700">
+                            {itemTotalUsd > 0 ? itemTotalUsd.toFixed(2) : "—"}
                           </div>
                           <div
                             title={row.sizeLabel || "Без размера"}
