@@ -1840,7 +1840,8 @@ export function CreateContainerExcelPage({
                 </div>
                 {filteredProducts.map((p) => {
                   const costTotal = p.costPriceUSD > 0 ? p.costPriceUSD : 0;
-                  const costTotalCny = costTotal > 0 && rateNumber > 0 ? costTotal / rateNumber : 0;
+                  const currentRate = toNumber(rate);
+                  const costTotalCny = costTotal > 0 && currentRate > 0 ? costTotal / currentRate : 0;
                   const saleTotal = p.basePriceUSD > 0 ? p.basePriceUSD : 0;
                   return (
                     <button
