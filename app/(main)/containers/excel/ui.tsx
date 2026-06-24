@@ -149,6 +149,20 @@ function formatSheetValue(value: number, digits = 2) {
   return value.toFixed(digits);
 }
 
+function getDefaultContainerName() {
+  const now = new Date();
+  const month = new Intl.DateTimeFormat("ru-RU", { month: "long" }).format(now);
+  return `Контейнер ${month} ${now.getFullYear()}`;
+}
+
+function getContainerSheetName(name: string) {
+  const cleaned = String(name ?? "")
+    .trim()
+    .replace(/[\\/*?:[\]]/g, " ")
+    .replace(/\s+/g, " ");
+  return (cleaned || getDefaultContainerName()).slice(0, 31);
+}
+
 export function CreateContainerExcelPage({
   defaultRate,
   products,
@@ -788,7 +802,7 @@ export function CreateContainerExcelPage({
     try {
       const ExcelJSModule = await import("exceljs");
       const workbook = new ExcelJSModule.Workbook();
-      const sheet = workbook.addWorksheet("TRUCK ALL-1", {
+      const sheet = workbook.addWorksheet(getContainerSheetName(name), {
         views: [{ state: "frozen", ySplit: 6 }],
       });
       const totalLogisticsAndCustoms = expenseTotals.road + expenseTotals.customs;
@@ -1368,6 +1382,61 @@ export function CreateContainerExcelPage({
           </button>
         </div>
 
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:flex xl:flex-wrap xl:justify-end">
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importFromExcelFile(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => excelInputRef.current?.click()}
+            disabled={excelBusy}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {excelBusy ? "Обработка..." : "Импорт Excel"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportToExcel()}
+            disabled={excelBusy}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Скачать Excel
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadTemplateExcel()}
+            disabled={excelBusy}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Скачать шаблон
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPickerOpen(true);
+              setSearch("");
+            }}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Добавить товар
+          </button>
+          <button
+            type="button"
+            onClick={addBlankItemRow}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Пустая строка
+          </button>
+        </div>
+
         {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
         {state.success ? <p className="text-sm text-emerald-700">Контейнер создан.</p> : null}
 
@@ -1376,68 +1445,14 @@ export function CreateContainerExcelPage({
 
       <div className="grid min-h-0 grid-rows-[1fr_auto_auto] gap-4">
         <article className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
-          <div className="sticky top-0 z-20 flex flex-col gap-3 border-b border-[var(--border)] bg-white px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="border-b border-[var(--border)] bg-white px-4 py-3">
             <div>
-              <h2 className="text-lg font-semibold tracking-[0.18em] text-slate-900">TRUCK ALL-1</h2>
+              <h2 className="text-lg font-semibold tracking-[0.18em] text-slate-900">{name.trim() || getDefaultContainerName()}</h2>
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Основная таблица товаров</p>
-            </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:flex xl:w-auto xl:flex-wrap">
-              <input
-                ref={excelInputRef}
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void importFromExcelFile(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => excelInputRef.current?.click()}
-                disabled={excelBusy}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                {excelBusy ? "Обработка..." : "Импорт Excel"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void exportToExcel()}
-                disabled={excelBusy}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Скачать Excel
-              </button>
-              <button
-                type="button"
-                onClick={() => void downloadTemplateExcel()}
-                disabled={excelBusy}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Скачать шаблон
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPickerOpen(true);
-                  setSearch("");
-                }}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Добавить товар
-              </button>
-              <button
-                type="button"
-                onClick={addBlankItemRow}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Пустая строка
-              </button>
             </div>
           </div>
           {excelMessage ? (
-            <div className="sticky top-[88px] z-10 border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm text-slate-700 xl:top-[73px]">{excelMessage}</div>
+            <div className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm text-slate-700">{excelMessage}</div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-auto bg-white">
             <div className="min-w-[2800px]">
