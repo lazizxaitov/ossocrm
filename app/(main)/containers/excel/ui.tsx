@@ -183,6 +183,8 @@ export function CreateContainerExcelPage({
   const [rate, setRate] = useState(defaultRate ? String(defaultRate) : "");
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState<ProductOption | null>(null);
+  const [pendingQuantity, setPendingQuantity] = useState("1");
   const [search, setSearch] = useState("");
   const [nextKey, setNextKey] = useState(2);
   const [rows, setRows] = useState<GridRow[]>([]);
@@ -949,9 +951,10 @@ export function CreateContainerExcelPage({
   }
 
 
-  function addProduct(product: ProductOption) {
+  function addProduct(product: ProductOption, quantity = 1) {
     const rateValue = toNumber(rate);
     const priceCny = product.costPriceUSD > 0 && rateValue > 0 ? String(Number((product.costPriceUSD / rateValue).toFixed(4))) : "";
+    const safeQuantity = Math.max(1, Math.floor(quantity));
     setRows((prev) => [
       ...prev,
       {
@@ -962,7 +965,7 @@ export function CreateContainerExcelPage({
         priceCNY: priceCny,
         saize: product.size || "",
         color: "",
-        quantity: "1",
+        quantity: String(safeQuantity),
         totalAmountCNY: "",
         cbm: product.cbm > 0 ? String(product.cbm) : "",
         kg: product.kg > 0 ? String(product.kg) : "",
@@ -973,6 +976,19 @@ export function CreateContainerExcelPage({
       },
     ]);
     setNextKey((v) => v + 1);
+  }
+
+  function openQuantityModal(product: ProductOption) {
+    setPendingProduct(product);
+    setPendingQuantity("1");
+  }
+
+  function confirmPendingProduct() {
+    if (!pendingProduct) return;
+    const quantity = Math.max(1, Math.floor(toNumber(pendingQuantity)));
+    addProduct(pendingProduct, quantity);
+    setPendingProduct(null);
+    setPendingQuantity("1");
   }
 
   function addBlankItemRow() {
@@ -1862,10 +1878,7 @@ export function CreateContainerExcelPage({
                     <button
                       type="button"
                       key={p.id}
-                      onClick={() => {
-                        addProduct(p);
-                        setPickerOpen(false);
-                      }}
+                      onClick={() => openQuantityModal(p)}
                       className="grid w-full grid-cols-[120px_180px_140px_140px_140px_140px_160px_1fr_120px] items-center gap-3 border-b border-[var(--border)] px-3 py-3 text-left text-sm hover:bg-slate-50"
                     >
                       <span className="truncate font-medium text-slate-800">{p.sku}</span>
@@ -1882,6 +1895,53 @@ export function CreateContainerExcelPage({
                 })}
                 {!filteredProducts.length ? <p className="px-3 py-3 text-sm text-slate-500">Ничего не найдено.</p> : null}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingProduct ? (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-900/30 p-4" onClick={() => setPendingProduct(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h4 className="text-base font-semibold text-slate-900">Количество товара</h4>
+            <p className="mt-1 text-sm text-slate-600">
+              {pendingProduct.sku} — {pendingProduct.name}
+            </p>
+            <div className="mt-4 grid gap-2">
+              <label className="text-sm text-slate-700">
+                Количество
+                <input
+                  value={pendingQuantity}
+                  onChange={(e) => setPendingQuantity(e.target.value)}
+                  type="number"
+                  min={1}
+                  step={1}
+                  autoFocus
+                  className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      confirmPendingProduct();
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingProduct(null)}
+                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={confirmPendingProduct}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                Добавить
+              </button>
             </div>
           </div>
         </div>
