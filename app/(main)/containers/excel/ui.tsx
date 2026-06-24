@@ -1256,6 +1256,7 @@ export function CreateContainerExcelPage({
       | keyof GridRow
       | "picture"
       | "productTotal"
+      | "productTotalCny"
       | "costPriceUSD"
       | "salePriceUSD"
       | "saleTotalUSD"
@@ -1271,6 +1272,7 @@ export function CreateContainerExcelPage({
     { id: "localName", label: "OSSO NAME", width: "min-w-[180px]" },
     { id: "picture", label: "PICTURE / 图片", width: "min-w-[140px]" },
     { id: "productTotal", label: "ОБЩАЯ СУММА ТОВАРА", width: "min-w-[180px]" },
+    { id: "productTotalCny", label: "СУММА В ЮАНЯХ", width: "min-w-[170px]" },
     { id: "costPriceUSD", label: "СЕБЕСТОИМОСТЬ", width: "min-w-[170px]" },
     { id: "salePriceUSD", label: "ЦЕНА ПРОДАЖИ", width: "min-w-[170px]" },
     { id: "saleTotalUSD", label: "ОБЩЕЕ ПО КОЛИЧЕСТВУ", width: "min-w-[190px]" },
@@ -1460,6 +1462,7 @@ export function CreateContainerExcelPage({
                     (c) =>
                       c.id !== "picture" &&
                       c.id !== "productTotal" &&
+                      c.id !== "productTotalCny" &&
                       c.id !== "costPriceUSD" &&
                       c.id !== "salePriceUSD" &&
                       c.id !== "saleTotalUSD" &&
@@ -1477,6 +1480,7 @@ export function CreateContainerExcelPage({
                       : (product?.costPriceUSD ?? 0);
                   const unitUsdValue = costPriceUsdValue;
                   const productTotalValue = toNumber(r.totalAmountUSD) || toNumber(calcLineTotalUsd(r));
+                  const productTotalCnyValue = toNumber(r.totalAmountCNY) || toNumber(calcTotalAmountCny(r));
                   const salePriceUsdValue = product?.basePriceUSD ?? 0;
                   const saleTotalUsdValue = quantityValue > 0 && salePriceUsdValue > 0 ? salePriceUsdValue * quantityValue : 0;
                   const averagePercentValue = productTotals.totalUsd > 0 ? (productTotalValue / productTotals.totalUsd) * 100 : 0;
@@ -1506,6 +1510,7 @@ export function CreateContainerExcelPage({
                         }
                         if (
                           c.id === "productTotal" ||
+                          c.id === "productTotalCny" ||
                           c.id === "costPriceUSD" ||
                           c.id === "salePriceUSD" ||
                           c.id === "saleTotalUSD" ||
@@ -1518,6 +1523,8 @@ export function CreateContainerExcelPage({
                           const value = Number(
                             c.id === "productTotal"
                               ? productTotalValue
+                              : c.id === "productTotalCny"
+                                ? productTotalCnyValue
                               : c.id === "costPriceUSD"
                                 ? costPriceUsdValue
                                 : c.id === "salePriceUSD"
@@ -1819,11 +1826,12 @@ export function CreateContainerExcelPage({
               className="mt-3 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
             />
             <div className="mt-3 max-h-[60vh] overflow-auto rounded-xl border border-[var(--border)]">
-              <div className="min-w-[1100px]">
-                <div className="grid grid-cols-[120px_180px_140px_140px_140px_160px_1fr_120px] border-b border-[var(--border)] bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+              <div className="min-w-[1240px]">
+                <div className="grid grid-cols-[120px_180px_140px_140px_140px_140px_160px_1fr_120px] border-b border-[var(--border)] bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                   <span>SKU</span>
                   <span>Название</span>
                   <span>Общая сумма</span>
+                  <span>Сумма в юанях</span>
                   <span>Себестоимость</span>
                   <span>Цена продажи</span>
                   <span>Общее по кол.</span>
@@ -1832,6 +1840,7 @@ export function CreateContainerExcelPage({
                 </div>
                 {filteredProducts.map((p) => {
                   const costTotal = p.costPriceUSD > 0 ? p.costPriceUSD : 0;
+                  const costTotalCny = costTotal > 0 && rateNumber > 0 ? costTotal / rateNumber : 0;
                   const saleTotal = p.basePriceUSD > 0 ? p.basePriceUSD : 0;
                   return (
                     <button
@@ -1841,11 +1850,12 @@ export function CreateContainerExcelPage({
                         addProduct(p);
                         setPickerOpen(false);
                       }}
-                      className="grid w-full grid-cols-[120px_180px_140px_140px_140px_160px_1fr_120px] items-center gap-3 border-b border-[var(--border)] px-3 py-3 text-left text-sm hover:bg-slate-50"
+                      className="grid w-full grid-cols-[120px_180px_140px_140px_140px_140px_160px_1fr_120px] items-center gap-3 border-b border-[var(--border)] px-3 py-3 text-left text-sm hover:bg-slate-50"
                     >
                       <span className="truncate font-medium text-slate-800">{p.sku}</span>
                       <span className="truncate text-slate-800">{p.name}</span>
                       <span className="text-slate-700">{costTotal > 0 ? costTotal.toFixed(2) : "—"}</span>
+                      <span className="text-slate-700">{costTotalCny > 0 ? costTotalCny.toFixed(2) : "—"}</span>
                       <span className="text-slate-700">{p.costPriceUSD > 0 ? p.costPriceUSD.toFixed(2) : "—"}</span>
                       <span className="text-slate-700">{p.basePriceUSD > 0 ? p.basePriceUSD.toFixed(2) : "—"}</span>
                       <span className="text-slate-700">{saleTotal > 0 ? saleTotal.toFixed(2) : "—"}</span>
