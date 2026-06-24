@@ -1314,14 +1314,14 @@ export function CreateContainerExcelPage({
         <input type="hidden" name="expensesJson" value={expensesJson} />
         <input type="hidden" name="containerItemsJson" value={containerItemsJson} />
 
-        <div className="grid gap-2 xl:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))_auto]">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))_auto]">
           <input
             name="name"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Контейнер март 2026"
-            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm md:col-span-2 xl:col-span-1"
           />
           <input
             name="purchaseDate"
@@ -1362,7 +1362,7 @@ export function CreateContainerExcelPage({
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 md:col-span-2 xl:col-span-1 xl:w-auto"
           >
             {isPending ? "Сохранение..." : "Сохранить"}
           </button>
@@ -1376,12 +1376,12 @@ export function CreateContainerExcelPage({
 
       <div className="grid min-h-0 grid-rows-[1fr_auto_auto] gap-4">
         <article className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+          <div className="sticky top-0 z-20 flex flex-col gap-3 border-b border-[var(--border)] bg-white px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h2 className="text-lg font-semibold tracking-[0.18em] text-slate-900">TRUCK ALL-1</h2>
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Основная таблица товаров</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:flex xl:w-auto xl:flex-wrap">
               <input
                 ref={excelInputRef}
                 type="file"
@@ -1437,7 +1437,7 @@ export function CreateContainerExcelPage({
             </div>
           </div>
           {excelMessage ? (
-            <div className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm text-slate-700">{excelMessage}</div>
+            <div className="sticky top-[88px] z-10 border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm text-slate-700 xl:top-[73px]">{excelMessage}</div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-auto bg-white">
             <div className="min-w-[2800px]">

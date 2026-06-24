@@ -410,11 +410,11 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
 
   return (
     <article className="grid h-full min-h-0 grid-rows-[auto_auto_1fr_auto_auto] gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-20 grid grid-cols-1 gap-2 rounded-xl border border-[var(--border)] bg-white p-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center">
         <select
           value={defaultCategoryId}
           onChange={(event) => setDefaultCategoryId(event.target.value)}
-          className="min-w-56 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700"
+          className="min-w-0 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700 xl:min-w-56"
         >
           {categoryOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -436,7 +436,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
           min={0}
           step="0.0001"
           placeholder="Yuan to USD"
-          className="w-40 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700"
+          className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700 xl:w-40"
         />
         <button
           type="button"
@@ -452,7 +452,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
           min={0}
           step="0.01"
           placeholder="YO'LGA USD"
-          className="w-36 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700"
+          className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700 xl:w-36"
         />
         <input
           value={customsUsd}
@@ -461,7 +461,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
           min={0}
           step="0.01"
           placeholder="RASTAMOJKA USD"
-          className="w-40 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700"
+          className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-slate-700 xl:w-40"
         />
         <button
           type="button"
