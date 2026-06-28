@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { COSTING_RULE_MODES, resolveCostingRuleMode } from "@/lib/costing-rules";
 import { prisma } from "@/lib/prisma";
 
 type TxClient = Prisma.TransactionClient;
@@ -20,11 +21,17 @@ export async function recalculateContainerFinancials(
     tx.containerExpense.findMany({
       where: { containerId },
       select: {
+        category: true,
         amountUSD: true,
         corrections: { select: { correctionAmountUSD: true } },
       },
     }),
   ]);
+  const control = await tx.systemControl.findUnique({
+    where: { id: 1 },
+    select: { costingRuleMode: true },
+  });
+  const costingRuleMode = resolveCostingRuleMode(control?.costingRuleMode);
 
   let totalSalesRevenue = 0;
   let totalCostOfGoodsSold = 0;
@@ -38,6 +45,12 @@ export async function recalculateContainerFinancials(
 
   const totalExpenses = expenses.reduce((sum, expense) => {
     const corrections = expense.corrections.reduce((inner, row) => inner + row.correctionAmountUSD, 0);
+    if (
+      costingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 &&
+      (expense.category === "CUSTOMS" || expense.category === "TRANSPORT")
+    ) {
+      return sum;
+    }
     return sum + expense.amountUSD + corrections;
   }, 0);
 

@@ -11,10 +11,13 @@ export default async function ProductsExcelPage() {
     redirect("/products");
   }
 
-  const categories = await prisma.productCategory.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, description: true },
-  });
+  const [categories, control] = await Promise.all([
+    prisma.productCategory.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, description: true },
+    }),
+    prisma.systemControl.findUnique({ where: { id: 1 }, select: { costingRuleMode: true } }),
+  ]);
 
   return (
     <section className="grid h-[calc(100dvh-120px)] min-h-0 grid-rows-[auto_1fr] gap-4">
@@ -36,7 +39,7 @@ export default async function ProductsExcelPage() {
       </article>
 
       <div className="min-h-0">
-        <CreateProductsExcelPage categories={categories} />
+        <CreateProductsExcelPage categories={categories} costingRuleMode={control?.costingRuleMode ?? "LEGACY"} />
       </div>
     </section>
   );

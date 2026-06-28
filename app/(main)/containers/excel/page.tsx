@@ -11,7 +11,7 @@ export default async function CreateContainerExcelRoute() {
     redirect("/containers");
   }
 
-  const [latestCurrency, products, investors] = await Promise.all([
+  const [latestCurrency, products, investors, control] = await Promise.all([
     prisma.currencySetting.findFirst({ orderBy: { updatedAt: "desc" } }),
     prisma.product.findMany({
       orderBy: { name: "asc" },
@@ -29,6 +29,7 @@ export default async function CreateContainerExcelRoute() {
       },
     }),
     prisma.investor.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.systemControl.findUnique({ where: { id: 1 }, select: { costingRuleMode: true } }),
   ]);
 
   return (
@@ -66,6 +67,7 @@ export default async function CreateContainerExcelRoute() {
             categoryName: product.category?.name ?? "Без категории",
           }))}
           investors={investors}
+          costingRuleMode={control?.costingRuleMode ?? "LEGACY"}
         />
       </div>
     </section>

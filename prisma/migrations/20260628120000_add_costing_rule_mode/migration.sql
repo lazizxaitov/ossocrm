@@ -1,0 +1,1 @@
+ALTER TABLE "SystemControl" ADD COLUMN "costingRuleMode" TEXT NOT NULL DEFAULT 'LEGACY';

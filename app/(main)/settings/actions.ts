@@ -8,6 +8,9 @@ import { restoreDatabaseBackup, restoreDatabaseFromBuffer } from "@/lib/backup";
 import { toNumber } from "@/lib/currency";
 import { prisma } from "@/lib/prisma";
 import { SETTINGS_ROLES } from "@/lib/rbac";
+import { resolveCostingRuleMode } from "@/lib/costing-rules";
+import { recalculateContainerFinancials } from "@/lib/container-finance";
+import { recalculateContainerUnitCost } from "@/lib/container-cost";
 
 export async function updateCurrencySettingAction(formData: FormData) {
   const session = await getRequiredSession();
@@ -305,4 +308,44 @@ export async function updateAutoLogoutTimerAction(formData: FormData) {
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+}
+
+export async function updateCostingRuleModeAction(formData: FormData) {
+  const session = await getRequiredSession();
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Изменение правила учета доступно только суперадминистратору.");
+  }
+
+  const costingRuleMode = resolveCostingRuleMode(String(formData.get("costingRuleMode") ?? ""));
+
+  await prisma.systemControl.upsert({
+    where: { id: 1 },
+    update: { costingRuleMode },
+    create: {
+      id: 1,
+      lastBackupAt: new Date(),
+      inventoryCheckedAt: null,
+      warehouseDiscrepancyCount: 0,
+      plannedMonthlyExpensesUSD: 0,
+      serverTimeOffsetMinutes: 0,
+      serverTimeAuto: true,
+      serverTimeZone: "UTC",
+      manualSystemTime: null,
+      costingRuleMode,
+    },
+  });
+
+  const containers = await prisma.container.findMany({ select: { id: true } });
+  for (const container of containers) {
+    await recalculateContainerUnitCost(container.id);
+    await recalculateContainerFinancials(container.id);
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/containers");
+  revalidatePath("/containers/excel");
+  revalidatePath("/products/excel");
+  revalidatePath("/dashboard");
+  revalidatePath("/stock");
+  revalidatePath("/sales");
 }

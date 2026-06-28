@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { calculateV2Costing, COSTING_RULE_MODES, resolveCostingRuleMode } from "@/lib/costing-rules";
 
 type ProductCategoryItem = {
   id: string;
@@ -32,6 +33,7 @@ type GridRow = {
 
 type CreateProductsExcelPageProps = {
   categories: ProductCategoryItem[];
+  costingRuleMode: string;
 };
 
 function toNumber(value: string) {
@@ -72,6 +74,20 @@ function formatValue(value: number, digits = 2) {
   return value.toFixed(digits);
 }
 
+function getAverageColumnLabel(mode: string) {
+  return mode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? "YO'L GA 1 SHT" : "ortacha birlik";
+}
+
+function getLogisticsColumnLabel(mode: string) {
+  return mode === COSTING_RULE_MODES.CATEGORY_BASED_V2
+    ? "YO'L + RASTAMOJKA 1 SHT"
+    : "YOLGA VA Rastamojka ortacha birligi";
+}
+
+function getCustomsFormulaForProductExcel(rowNumber: number) {
+  return `IF(OR(ISNUMBER(SEARCH("sifon",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("сифон",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),0.82,IF(OR(ISNUMBER(SEARCH("smesitel",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("смес",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mixer",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),1.47,IF(OR(ISNUMBER(SEARCH("unitaz",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("унитаз",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("toilet",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),18.81,IF(OR(ISNUMBER(SEARCH("rakovina",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("раков",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("sink",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("washbasin",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),6.65,0))))`;
+}
+
 function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
   return {
     key,
@@ -96,7 +112,7 @@ function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
   };
 }
 
-export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageProps) {
+export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateProductsExcelPageProps) {
   const [defaultRate, setDefaultRate] = useState("");
   const [logisticsUsd, setLogisticsUsd] = useState("");
   const [customsUsd, setCustomsUsd] = useState("");
@@ -111,9 +127,14 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const activeCostingRuleMode = resolveCostingRuleMode(costingRuleMode);
 
   const categoryOptions = useMemo(
     () => [{ value: "", label: "Без категории" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
+    [categories],
+  );
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((item) => [item.id, item.name])),
     [categories],
   );
 
@@ -134,6 +155,37 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
   }, [rows]);
 
   const sharedExtraCostsUsd = useMemo(() => toNumber(logisticsUsd) + toNumber(customsUsd), [customsUsd, logisticsUsd]);
+
+  function getRowMetrics(row: GridRow) {
+    const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+    const unitUsd = toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0 ? toNumber(row.priceCNY) * toNumber(row.exchangeRate) : 0;
+    const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcTotalAmountUsd(row));
+    if (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
+      const metrics = calculateV2Costing({
+        quantity,
+        unitPriceUsd: unitUsd,
+        lineTotalUsd: totalAmountUsd,
+        cbmPerUnit: toNumber(row.cbm),
+        categoryName: categoryNameById.get(row.categoryId) ?? null,
+        productName: row.localName,
+        sku: row.factoryName,
+      });
+      return {
+        quantity,
+        totalAmountUsd,
+        unitUsd,
+        averagePercent: metrics.transportPerUnitUsd,
+        logisticsAverage: metrics.extraPerUnitUsd,
+        birDonasi: metrics.finalUnitCostUsd,
+        jami: metrics.finalTotalCostUsd,
+      };
+    }
+    const averagePercent = totals.totalAmountUSD > 0 ? (totalAmountUsd / totals.totalAmountUSD) * 100 : 0;
+    const logisticsAverage = sharedExtraCostsUsd > 0 ? (sharedExtraCostsUsd * averagePercent) / 100 : 0;
+    const birDonasi = quantity > 0 ? (totalAmountUsd + logisticsAverage) / quantity : 0;
+    const jami = totalAmountUsd + logisticsAverage;
+    return { quantity, totalAmountUsd, unitUsd, averagePercent, logisticsAverage, birDonasi, jami };
+  }
 
   function updateRow(key: number, patch: Partial<GridRow>) {
     setRows((prev) =>
@@ -201,6 +253,8 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
       const sheet = workbook.addWorksheet("TRUCK ALL-1", {
         views: [{ state: "frozen", ySplit: 6 }],
       });
+      const averageColumnLabel = getAverageColumnLabel(activeCostingRuleMode);
+      const logisticsColumnLabel = getLogisticsColumnLabel(activeCostingRuleMode);
 
       sheet.getCell("A1").value = "Шаблон товаров";
       sheet.getCell("A1").font = { bold: true, size: 16 };
@@ -227,8 +281,8 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
         "КУРС",
         "Y - $",
         "TOTAL AMOUNT",
-        "ortacha birlik",
-        "YOLGA VA Rastamojka ortacha birligi",
+        averageColumnLabel,
+        logisticsColumnLabel,
         "BIR DONASI",
         "JAMI",
         "Категория",
@@ -272,14 +326,24 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
         sheet.getCell(`L${rowNumber}`).value = { formula: `IF(AND(J${rowNumber}>0,G${rowNumber}>0),J${rowNumber}*G${rowNumber},"")` };
         sheet.getCell(`N${rowNumber}`).value = { formula: `IF(AND(D${rowNumber}>0,M${rowNumber}>0),D${rowNumber}*M${rowNumber},"")` };
         sheet.getCell(`O${rowNumber}`).value = { formula: `IF(AND(H${rowNumber}>0,M${rowNumber}>0),H${rowNumber}*M${rowNumber},"")` };
-        sheet.getCell(`P${rowNumber}`).value = { formula: `IF($O$20=0,"",O${rowNumber}/$O$20*100)` };
-        sheet.getCell(`Q${rowNumber}`).value = { formula: `IF($R$20=0,"",P${rowNumber}/100*$R$20)` };
-        sheet.getCell(`R${rowNumber}`).value = { formula: `IF(G${rowNumber}=0,"",(O${rowNumber}+Q${rowNumber})/G${rowNumber})` };
-        sheet.getCell(`S${rowNumber}`).value = { formula: `IF(O${rowNumber}=0,"",O${rowNumber}+Q${rowNumber})` };
+        if (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
+          sheet.getCell(`P${rowNumber}`).value = { formula: `IF(AND(I${rowNumber}>0,G${rowNumber}>0),I${rowNumber}*85.714653,"")` };
+          sheet.getCell(`Q${rowNumber}`).value = { formula: `IF(G${rowNumber}>0,${getCustomsFormulaForProductExcel(rowNumber)},"")` };
+          sheet.getCell(`R${rowNumber}`).value = { formula: `IF(G${rowNumber}=0,"",N${rowNumber}+P${rowNumber}+Q${rowNumber})` };
+          sheet.getCell(`S${rowNumber}`).value = { formula: `IF(G${rowNumber}=0,"",R${rowNumber}*G${rowNumber})` };
+        } else {
+          sheet.getCell(`P${rowNumber}`).value = { formula: `IF($O$20=0,"",O${rowNumber}/$O$20*100)` };
+          sheet.getCell(`Q${rowNumber}`).value = { formula: `IF($R$20=0,"",P${rowNumber}/100*$R$20)` };
+          sheet.getCell(`R${rowNumber}`).value = { formula: `IF(G${rowNumber}=0,"",(O${rowNumber}+Q${rowNumber})/G${rowNumber})` };
+          sheet.getCell(`S${rowNumber}`).value = { formula: `IF(O${rowNumber}=0,"",O${rowNumber}+Q${rowNumber})` };
+        }
       }
 
       sheet.getCell("O20").value = { formula: "SUM(O7:O19)" };
-      sheet.getCell("R20").value = { formula: "O2+Q2" };
+      sheet.getCell("R20").value =
+        activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2
+          ? "по новой формуле"
+          : { formula: "O2+Q2" };
 
       sheet.columns = [
         { width: 24 },
@@ -520,8 +584,12 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">КУРС</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">Y - $</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
-              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">ortacha birlik</th>
-              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">YOLGA VA Rastamojka ortacha birligi</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">
+                {getAverageColumnLabel(activeCostingRuleMode)}
+              </th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold tracking-[0.04em]">
+                {getLogisticsColumnLabel(activeCostingRuleMode)}
+              </th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">BIR DONASI</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">JAMI</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Категория</th>
@@ -533,13 +601,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
           </thead>
           <tbody>
             {rows.map((row) => {
-              const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-              const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcTotalAmountUsd(row));
-              const unitUsd = toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0 ? toNumber(row.priceCNY) * toNumber(row.exchangeRate) : 0;
-              const averagePercent = totals.totalAmountUSD > 0 ? (totalAmountUsd / totals.totalAmountUSD) * 100 : 0;
-              const logisticsAverage = sharedExtraCostsUsd > 0 ? (sharedExtraCostsUsd * averagePercent) / 100 : 0;
-              const birDonasi = quantity > 0 ? (totalAmountUsd + logisticsAverage) / quantity : 0;
-              const jami = totalAmountUsd + logisticsAverage;
+              const metrics = getRowMetrics(row);
               return (
               <tr key={row.key} className="align-top text-slate-800">
                 <td className="border-b border-r border-slate-300 px-3 py-2">
@@ -667,7 +729,7 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 bg-slate-50 px-3 py-2 text-center font-medium text-slate-700">
-                  {formatValue(unitUsd)}
+                  {formatValue(metrics.unitUsd)}
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <input
@@ -680,16 +742,17 @@ export function CreateProductsExcelPage({ categories }: CreateProductsExcelPageP
                   />
                 </td>
                 <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
-                  {formatValue(averagePercent)}{averagePercent > 0 ? "%" : ""}
+                  {formatValue(metrics.averagePercent)}
+                  {metrics.averagePercent > 0 && activeCostingRuleMode === COSTING_RULE_MODES.LEGACY ? "%" : ""}
                 </td>
                 <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
-                  {formatValue(logisticsAverage)}
+                  {formatValue(metrics.logisticsAverage)}
                 </td>
                 <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
-                  {formatValue(birDonasi)}
+                  {formatValue(metrics.birDonasi)}
                 </td>
                 <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
-                  {formatValue(jami)}
+                  {formatValue(metrics.jami)}
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <select

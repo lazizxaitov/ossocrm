@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
-import { updateAutoLogoutTimerAction } from "@/app/(main)/settings/actions";
+import { updateAutoLogoutTimerAction, updateCostingRuleModeAction } from "@/app/(main)/settings/actions";
 import { BackupCard } from "@/app/(main)/settings/backup-card";
 import { ServerTimeCard } from "@/app/(main)/settings/server-time-card";
 import { UserAccessSection } from "@/app/(main)/settings/user-access-section";
 import { getRequiredSession } from "@/lib/auth";
 import { listBackups } from "@/lib/backup";
+import { COSTING_RULE_MODES, TRANSPORT_USD_PER_CBM, getCustomsRateUsdPerUnit, resolveCostingRuleMode } from "@/lib/costing-rules";
 import { prisma } from "@/lib/prisma";
 import { SETTINGS_ROLES } from "@/lib/rbac";
 
@@ -37,6 +38,7 @@ export default async function SettingsPage() {
   const canManageServerTime = isSuperAdmin;
   const canRestoreBackup = isSuperAdmin;
   const autoLogoutMinutes = Math.max(1, control?.serverTimeOffsetMinutes ?? 10);
+  const costingRuleMode = resolveCostingRuleMode(control?.costingRuleMode);
 
   const serverNow = new Date();
   const timeZone = control?.serverTimeZone ?? "UTC";
@@ -73,6 +75,64 @@ export default async function SettingsPage() {
             : "Доступен только раздел backup."}
         </p>
       </article>
+
+      {isSuperAdmin ? (
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <h3 className="text-base font-semibold text-slate-900">Правило учета себестоимости</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Переключает расчеты в Excel-окнах и пересчитывает себестоимость товаров по контейнерам во всей CRM.
+          </p>
+          <form action={updateCostingRuleModeAction} className="mt-4 grid gap-3">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-[var(--border)] p-4">
+                <input
+                  type="radio"
+                  name="costingRuleMode"
+                  value={COSTING_RULE_MODES.LEGACY}
+                  defaultChecked={costingRuleMode === COSTING_RULE_MODES.LEGACY}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium text-slate-900">Старое правило</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    Распределение логистики и растаможки по общей сумме контейнера как сейчас.
+                  </div>
+                </div>
+              </label>
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-[var(--border)] p-4">
+                <input
+                  type="radio"
+                  name="costingRuleMode"
+                  value={COSTING_RULE_MODES.CATEGORY_BASED_V2}
+                  defaultChecked={costingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium text-slate-900">Новое правило</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    По CBM и ставке растаможки за 1 шт по типу товара.
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div>1 m³ transport: <span className="font-medium">{TRANSPORT_USD_PER_CBM.toFixed(6)} USD</span></div>
+              <div>Rakovina: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "rakovina" }).toFixed(2)} USD/шт</span></div>
+              <div>Unitaz: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "unitaz" }).toFixed(2)} USD/шт</span></div>
+              <div>Sifon: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "sifon" }).toFixed(2)} USD/шт</span></div>
+              <div>Smesitel: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "smesitel" }).toFixed(2)} USD/шт</span></div>
+            </div>
+            <div>
+              <button
+                type="submit"
+                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                Сохранить правило учета
+              </button>
+            </div>
+          </form>
+        </article>
+      ) : null}
 
       {isSuperAdmin ? (
         <article className="rounded-2xl border border-[var(--border)] bg-white p-5">

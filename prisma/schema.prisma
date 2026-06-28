@@ -423,6 +423,7 @@ model SystemControl {
   serverTimeAuto           Boolean  @default(true)
   serverTimeZone           String   @default("UTC")
   manualSystemTime         DateTime?
+  costingRuleMode          String   @default("LEGACY")
   updatedAt                DateTime @updatedAt
 }
 
@@ -520,5 +521,4 @@ model InventorySessionItem {
   @@index([containerId])
   @@index([containerItemId])
 }
-
 
