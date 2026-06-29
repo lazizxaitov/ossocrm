@@ -155,6 +155,7 @@ model ContainerItem {
   cbm            Float?
   kg             Float?
   totalCbm       Float?
+  manualCustomsPerUnitUSD Float?
   costPerUnitUSD Float
   createdAt      DateTime  @default(now())
   container      Container @relation(fields: [containerId], references: [id], onDelete: Cascade)
@@ -521,4 +522,3 @@ model InventorySessionItem {
   @@index([containerId])
   @@index([containerItemId])
 }
-

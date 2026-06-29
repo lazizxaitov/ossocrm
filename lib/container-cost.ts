@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/prisma";
-import { calculateV2Costing, COSTING_RULE_MODES, resolveCostingRuleMode } from "@/lib/costing-rules";
+import {
+  buildCustomsFallbackPerUnitMap,
+  calculateV2Costing,
+  COSTING_RULE_MODES,
+  resolveCostingRuleMode,
+} from "@/lib/costing-rules";
 
 type TxClient = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 export async function recalculateContainerUnitCost(containerId: string, tx: TxClient = prisma) {
-  const [container, grouped, control, items] = await Promise.all([
+  const [container, grouped, control, items, expenses] = await Promise.all([
     tx.container.findUnique({
       where: { id: containerId },
       select: { totalPurchaseUSD: true, totalExpensesUSD: true },
@@ -25,6 +30,7 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
         unitPriceUSD: true,
         lineTotalUSD: true,
         cbm: true,
+        manualCustomsPerUnitUSD: true,
         product: {
           select: {
             name: true,
@@ -32,6 +38,13 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
             category: { select: { name: true } },
           },
         },
+      },
+    }),
+    tx.containerExpense.findMany({
+      where: { containerId },
+      select: {
+        category: true,
+        amountUSD: true,
       },
     }),
   ]);
@@ -43,6 +56,23 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
   const costingRuleMode = resolveCostingRuleMode(control?.costingRuleMode);
 
   if (costingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
+    const totalCustomsUsd = expenses
+      .filter((expense) => expense.category === "CUSTOMS")
+      .reduce((sum, expense) => sum + expense.amountUSD, 0);
+    const customsFallbackMap = buildCustomsFallbackPerUnitMap({
+      items: items.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        unitPriceUsd: item.unitPriceUSD,
+        lineTotalUsd: item.lineTotalUSD,
+        manualCustomsPerUnitUsd: item.manualCustomsPerUnitUSD,
+        categoryName: item.product.category?.name,
+        productName: item.product.name,
+        sku: item.product.sku,
+      })),
+      totalCustomsUsd,
+    });
+
     for (const item of items) {
       const metrics = calculateV2Costing({
         quantity: item.quantity,
@@ -52,6 +82,8 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
         categoryName: item.product.category?.name,
         productName: item.product.name,
         sku: item.product.sku,
+        manualCustomsPerUnitUsd: item.manualCustomsPerUnitUSD,
+        fallbackCustomsPerUnitUsd: customsFallbackMap.get(item.id) ?? 0,
       });
       await tx.containerItem.update({
         where: { id: item.id },

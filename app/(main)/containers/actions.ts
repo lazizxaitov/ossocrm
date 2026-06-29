@@ -225,6 +225,7 @@ export async function createContainerAction(
       cbm?: number;
       kg?: number;
       totalCbm?: number;
+      manualCustomsPerUnitUSD?: number;
     };
     type ContainerExpenseInput = {
       title: string;
@@ -288,6 +289,7 @@ export async function createContainerAction(
       if (!existing.cbm && row.cbm) existing.cbm = row.cbm;
       if (!existing.kg && row.kg) existing.kg = row.kg;
       if (!existing.totalCbm && row.totalCbm) existing.totalCbm = row.totalCbm;
+      if (!existing.manualCustomsPerUnitUSD && row.manualCustomsPerUnitUSD) existing.manualCustomsPerUnitUSD = row.manualCustomsPerUnitUSD;
     }
     const cleanedItems = [...itemsByProduct.values()];
     const itemsPurchaseUSD = cleanedItems.reduce(
@@ -356,6 +358,10 @@ export async function createContainerAction(
             totalCbm:
               Number.isFinite(row.totalCbm) && (row.totalCbm as number) >= 0
                 ? Number(row.totalCbm)
+                : null,
+            manualCustomsPerUnitUSD:
+              Number.isFinite(row.manualCustomsPerUnitUSD) && (row.manualCustomsPerUnitUSD as number) >= 0
+                ? Number(row.manualCustomsPerUnitUSD)
                 : null,
             costPerUnitUSD: 0,
           })),
