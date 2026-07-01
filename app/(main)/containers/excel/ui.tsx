@@ -65,6 +65,24 @@ function toNumber(raw: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeExchangeRateToUsd(raw: string | number) {
+  const rate = typeof raw === "number" ? raw : toNumber(raw);
+  if (!(rate > 0)) return 0;
+  return rate > 1 ? 1 / rate : rate;
+}
+
+function convertCnyToUsd(amountCny: number, rateRaw: string | number) {
+  const rate = normalizeExchangeRateToUsd(rateRaw);
+  if (!(amountCny > 0) || !(rate > 0)) return 0;
+  return amountCny * rate;
+}
+
+function convertUsdToCny(amountUsd: number, rateRaw: string | number) {
+  const rate = normalizeExchangeRateToUsd(rateRaw);
+  if (!(amountUsd > 0) || !(rate > 0)) return 0;
+  return amountUsd / rate;
+}
+
 function calcTotalCbm(row: Pick<GridRow, "quantity" | "cbm">) {
   const q = Math.max(0, Math.floor(toNumber(row.quantity)));
   const cbm = toNumber(row.cbm);
@@ -88,8 +106,8 @@ function calcTotalAmountCny(row: Pick<GridRow, "quantity" | "priceCNY">) {
 
 function calcLineTotalUsd(row: Pick<GridRow, "quantity" | "priceCNY" | "totalAmountCNY" | "exchangeRate">) {
   const totalCny = toNumber(row.totalAmountCNY) || toNumber(calcTotalAmountCny(row));
-  const rate = toNumber(row.exchangeRate);
-  if (totalCny > 0 && rate > 0) return String(Number((totalCny * rate).toFixed(2)));
+  const totalUsd = convertCnyToUsd(totalCny, row.exchangeRate);
+  if (totalUsd > 0) return String(Number(totalUsd.toFixed(2)));
   return "";
 }
 
@@ -205,8 +223,8 @@ function computeRowMetrics({
 }) {
   const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
   const baseUnitUsd =
-    toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0
-      ? toNumber(row.priceCNY) * toNumber(row.exchangeRate)
+    toNumber(row.priceCNY) > 0 && normalizeExchangeRateToUsd(row.exchangeRate) > 0
+      ? convertCnyToUsd(toNumber(row.priceCNY), row.exchangeRate)
       : (product?.costPriceUSD ?? 0);
   const baseTotalUsd = toNumber(row.totalAmountUSD) || toNumber(calcLineTotalUsd(row));
   const baseTotalCny = toNumber(row.totalAmountCNY) || toNumber(calcTotalAmountCny(row));
@@ -322,11 +340,11 @@ export function CreateContainerExcelPage({
     const payload = rows
       .map((r) => {
         const quantity = Math.max(0, Math.floor(toNumber(r.quantity)));
-        const rateValue = toNumber(r.exchangeRate);
+        const rateValue = normalizeExchangeRateToUsd(r.exchangeRate);
         const priceCny = toNumber(r.priceCNY);
         const totalAmountCny = toNumber(r.totalAmountCNY) || toNumber(calcTotalAmountCny(r));
-        const unitPriceUSD = priceCny > 0 && rateValue > 0 ? Number((priceCny * rateValue).toFixed(4)) : 0;
-        const lineTotalUSD = toNumber(r.totalAmountUSD) || (totalAmountCny > 0 && rateValue > 0 ? Number((totalAmountCny * rateValue).toFixed(2)) : 0);
+        const unitPriceUSD = priceCny > 0 && rateValue > 0 ? Number(convertCnyToUsd(priceCny, rateValue).toFixed(4)) : 0;
+        const lineTotalUSD = toNumber(r.totalAmountUSD) || (totalAmountCny > 0 && rateValue > 0 ? Number(convertCnyToUsd(totalAmountCny, rateValue).toFixed(2)) : 0);
         const cbm = toNumber(r.cbm);
         const kg = toNumber(r.kg);
         const totalCbm = toNumber(r.totalCbm);
@@ -427,8 +445,8 @@ export function CreateContainerExcelPage({
             id: row.key,
             quantity: Math.max(0, Math.floor(toNumber(row.quantity))),
             unitPriceUsd:
-              toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0
-                ? toNumber(row.priceCNY) * toNumber(row.exchangeRate)
+              toNumber(row.priceCNY) > 0 && normalizeExchangeRateToUsd(row.exchangeRate) > 0
+                ? convertCnyToUsd(toNumber(row.priceCNY), row.exchangeRate)
                 : (product?.costPriceUSD ?? 0),
             lineTotalUsd: toNumber(row.totalAmountUSD) || toNumber(calcLineTotalUsd(row)),
             categoryName: product?.categoryName,
@@ -583,8 +601,8 @@ export function CreateContainerExcelPage({
             if (!next.factoryName) next.factoryName = hit.sku;
             if (!next.localName) next.localName = hit.name;
             if (!next.saize) next.saize = hit.size || "";
-            if (!next.priceCNY && hit.costPriceUSD > 0 && toNumber(next.exchangeRate) > 0) {
-              next.priceCNY = String(Number((hit.costPriceUSD / toNumber(next.exchangeRate)).toFixed(4)));
+            if (!next.priceCNY && hit.costPriceUSD > 0 && normalizeExchangeRateToUsd(next.exchangeRate) > 0) {
+              next.priceCNY = String(Number(convertUsdToCny(hit.costPriceUSD, next.exchangeRate).toFixed(4)));
             }
             if (!next.cbm && hit.cbm > 0) next.cbm = String(hit.cbm);
             if (!next.kg && hit.kg > 0) next.kg = String(hit.kg);
@@ -701,7 +719,8 @@ export function CreateContainerExcelPage({
         const rateCandidate = getWorksheetCellNumber(worksheet.getRow(headerRowNumber).getCell(14).value);
         if (rateCandidate > 0 && rateCandidate < 100) exchangeRateFromSheet = rateCandidate;
       }
-      const exchangeRateValue = exchangeRateFromSheet > 0 ? String(exchangeRateFromSheet) : rate;
+      const normalizedExchangeRate = normalizeExchangeRateToUsd(exchangeRateFromSheet);
+      const exchangeRateValue = normalizedExchangeRate > 0 ? String(Number(normalizedExchangeRate.toFixed(6))) : rate;
       const totalAmountUsdCol =
         amountCols.find((col) => col > (totalNwKgsCol || totalCbmCol || kgCol || totalAmountCnyCol)) ?? 0;
 
@@ -1219,7 +1238,7 @@ export function CreateContainerExcelPage({
 
   function addProduct(product: ProductOption, quantity = 1) {
     const rateValue = toNumber(rate);
-    const priceCny = product.costPriceUSD > 0 && rateValue > 0 ? String(Number((product.costPriceUSD / rateValue).toFixed(4))) : "";
+    const priceCny = product.costPriceUSD > 0 && rateValue > 0 ? String(Number(convertUsdToCny(product.costPriceUSD, rateValue).toFixed(4))) : "";
     const safeQuantity = Math.max(1, Math.floor(quantity));
     setRows((prev) => [
       ...prev,
@@ -1438,8 +1457,8 @@ export function CreateContainerExcelPage({
             if (!merged.factoryName) merged.factoryName = hit.sku;
             if (!merged.localName) merged.localName = hit.name;
             if (!merged.saize) merged.saize = hit.size || "";
-            if (!merged.priceCNY && hit.costPriceUSD > 0 && toNumber(merged.exchangeRate) > 0) {
-              merged.priceCNY = String(Number((hit.costPriceUSD / toNumber(merged.exchangeRate)).toFixed(4)));
+            if (!merged.priceCNY && hit.costPriceUSD > 0 && normalizeExchangeRateToUsd(merged.exchangeRate) > 0) {
+              merged.priceCNY = String(Number(convertUsdToCny(hit.costPriceUSD, merged.exchangeRate).toFixed(4)));
             }
             if (!merged.cbm && hit.cbm > 0) merged.cbm = String(hit.cbm);
             if (!merged.kg && hit.kg > 0) merged.kg = String(hit.kg);

@@ -41,6 +41,18 @@ function toNumber(value: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeExchangeRateToUsd(raw: string | number) {
+  const rate = typeof raw === "number" ? raw : toNumber(raw);
+  if (!(rate > 0)) return 0;
+  return rate > 1 ? 1 / rate : rate;
+}
+
+function convertCnyToUsd(amountCny: number, rateRaw: string | number) {
+  const rate = normalizeExchangeRateToUsd(rateRaw);
+  if (!(amountCny > 0) || !(rate > 0)) return 0;
+  return amountCny * rate;
+}
+
 function calcTotalAmountCny(row: Pick<GridRow, "quantity" | "priceCNY">) {
   const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
   const priceCNY = toNumber(row.priceCNY);
@@ -64,8 +76,8 @@ function calcNetWorthKgs(row: Pick<GridRow, "quantity" | "kg">) {
 
 function calcTotalAmountUsd(row: Pick<GridRow, "quantity" | "priceCNY" | "totalAmountCNY" | "exchangeRate">) {
   const totalAmountCNY = toNumber(row.totalAmountCNY) || toNumber(calcTotalAmountCny(row));
-  const exchangeRate = toNumber(row.exchangeRate);
-  if (totalAmountCNY > 0 && exchangeRate > 0) return String(Number((totalAmountCNY * exchangeRate).toFixed(2)));
+  const totalUsd = convertCnyToUsd(totalAmountCNY, row.exchangeRate);
+  if (totalUsd > 0) return String(Number(totalUsd.toFixed(2)));
   return "";
 }
 
@@ -158,7 +170,10 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
 
   function getRowMetrics(row: GridRow) {
     const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
-    const unitUsd = toNumber(row.priceCNY) > 0 && toNumber(row.exchangeRate) > 0 ? toNumber(row.priceCNY) * toNumber(row.exchangeRate) : 0;
+    const unitUsd =
+      toNumber(row.priceCNY) > 0 && normalizeExchangeRateToUsd(row.exchangeRate) > 0
+        ? convertCnyToUsd(toNumber(row.priceCNY), row.exchangeRate)
+        : 0;
     const totalAmountUsd = toNumber(row.totalAmountUSD) || toNumber(calcTotalAmountUsd(row));
     if (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
       const metrics = calculateV2Costing({
@@ -407,8 +422,8 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
       const cleanedRows = rows
         .filter((row) => row.include)
         .map((row) => {
-          const exchangeRate = toNumber(row.exchangeRate);
-          const costPriceUSD = Number((toNumber(row.priceCNY) * exchangeRate).toFixed(4));
+          const exchangeRate = normalizeExchangeRateToUsd(row.exchangeRate);
+          const costPriceUSD = Number(convertCnyToUsd(toNumber(row.priceCNY), exchangeRate).toFixed(4));
           return {
             sku: row.factoryName.trim(),
             name: row.localName.trim(),
