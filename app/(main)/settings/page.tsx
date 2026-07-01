@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { updateAutoLogoutTimerAction, updateCostingRuleModeAction } from "@/app/(main)/settings/actions";
 import { BackupCard } from "@/app/(main)/settings/backup-card";
+import { ResetBusinessDataCard } from "@/app/(main)/settings/reset-business-data-card";
 import { ServerTimeCard } from "@/app/(main)/settings/server-time-card";
 import { UserAccessSection } from "@/app/(main)/settings/user-access-section";
 import { getRequiredSession } from "@/lib/auth";
@@ -196,6 +197,8 @@ export default async function SettingsPage() {
           }))}
         canRestore={canRestoreBackup}
       />
+
+      {isSuperAdmin ? <ResetBusinessDataCard /> : null}
 
       {isSuperAdmin ? (
         <UserAccessSection

@@ -349,3 +349,83 @@ export async function updateCostingRuleModeAction(formData: FormData) {
   revalidatePath("/stock");
   revalidatePath("/sales");
 }
+
+export async function resetBusinessDataAction() {
+  const session = await getRequiredSession();
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Сброс данных доступен только суперадминистратору.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.returnItem.deleteMany();
+    await tx.payment.deleteMany();
+    await tx.return.deleteMany();
+    await tx.saleItem.deleteMany();
+    await tx.inventorySessionItem.deleteMany();
+    await tx.manualStockEntry.deleteMany();
+    await tx.expenseCorrection.deleteMany();
+    await tx.containerExpense.deleteMany();
+    await tx.investorPayout.deleteMany();
+    await tx.operatingExpense.deleteMany();
+    await tx.adjustment.deleteMany();
+    await tx.inventorySession.deleteMany();
+    await tx.sale.deleteMany();
+    await tx.containerInvestment.deleteMany();
+    await tx.containerItem.deleteMany();
+    await tx.container.deleteMany();
+    await tx.client.deleteMany();
+    await tx.financialPeriod.deleteMany();
+    await tx.auditLog.deleteMany();
+    await tx.documentCounter.deleteMany();
+    await tx.product.deleteMany();
+    await tx.productCategory.deleteMany();
+    await tx.productSize.deleteMany();
+    await tx.investor.deleteMany();
+
+    await tx.systemControl.upsert({
+      where: { id: 1 },
+      update: {
+        inventoryCheckedAt: null,
+        warehouseDiscrepancyCount: 0,
+        closedMonth: null,
+        plannedMonthlyExpensesUSD: 0,
+      },
+      create: {
+        id: 1,
+        lastBackupAt: new Date(),
+        inventoryCheckedAt: null,
+        warehouseDiscrepancyCount: 0,
+        closedMonth: null,
+        plannedMonthlyExpensesUSD: 0,
+        serverTimeOffsetMinutes: 0,
+        serverTimeAuto: true,
+        serverTimeZone: "UTC",
+        manualSystemTime: null,
+        costingRuleMode: "LEGACY",
+      },
+    });
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  revalidatePath("/containers");
+  revalidatePath("/containers/excel");
+  revalidatePath("/containers/import");
+  revalidatePath("/products");
+  revalidatePath("/products/excel");
+  revalidatePath("/sales");
+  revalidatePath("/clients");
+  revalidatePath("/investors");
+  revalidatePath("/investor");
+  revalidatePath("/expenses");
+  revalidatePath("/stock");
+  revalidatePath("/warehouse");
+  revalidatePath("/warehouse/containers");
+  revalidatePath("/warehouse/history");
+  revalidatePath("/warehouse/inventory");
+  revalidatePath("/financial-periods");
+  revalidatePath("/inventory-sessions");
+  revalidatePath("/audit");
+  revalidatePath("/categories");
+  revalidatePath("/vanities");
+}
