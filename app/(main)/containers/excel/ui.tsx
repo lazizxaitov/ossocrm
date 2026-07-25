@@ -259,6 +259,8 @@ function computeRowMetrics({
 
   const totalLogisticsAndCustoms = totalRoadExpenses + totalCustomsExpenses;
   const averagePercentValue = totalProductUsd > 0 ? (baseTotalUsd / totalProductUsd) * 100 : 0;
+  const totalTransportUsd = totalRoadExpenses > 0 ? (totalRoadExpenses * averagePercentValue) / 100 : 0;
+  const totalCustomsUsd = totalCustomsExpenses > 0 ? (totalCustomsExpenses * averagePercentValue) / 100 : 0;
   const logisticsAverageValue = totalLogisticsAndCustoms > 0 ? (totalLogisticsAndCustoms * averagePercentValue) / 100 : 0;
   const grandTotalValue = baseTotalUsd + logisticsAverageValue;
   const perUnitTotalValue = quantity > 0 ? grandTotalValue / quantity : 0;
@@ -273,8 +275,8 @@ function computeRowMetrics({
     logisticsAverageValue,
     perUnitTotalValue,
     grandTotalValue,
-    totalTransportUsd: 0,
-    totalCustomsUsd: 0,
+    totalTransportUsd,
+    totalCustomsUsd,
   };
 }
 
@@ -376,6 +378,18 @@ export function CreateContainerExcelPage({
     return JSON.stringify(payload);
   }, [investmentRows]);
 
+  const derivedOverallCustomsUSD = useMemo(
+    () =>
+      rows.reduce((sum, row) => {
+        const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+        const customsPerUnit = toNumber(row.manualCustomsPerUnitUSD);
+        return sum + (quantity > 0 && customsPerUnit > 0 ? quantity * customsPerUnit : 0);
+      }, 0),
+    [rows],
+  );
+
+  const effectiveOverallCustomsUSD = derivedOverallCustomsUSD > 0 ? derivedOverallCustomsUSD : toNumber(overallCustomsUSD);
+
   const expensesJson = useMemo(() => {
     const payload = expenseRows
       .map((r) => ({
@@ -385,17 +399,19 @@ export function CreateContainerExcelPage({
         description: r.description,
       }))
       .filter((x) => String(x.title ?? "").trim().length > 0 && x.amountUSD > 0);
-    const overallCustomsValue = toNumber(overallCustomsUSD);
-    if (overallCustomsValue > 0) {
+    if (effectiveOverallCustomsUSD > 0) {
       payload.push({
         title: "Растаможка (общая)",
         category: "CUSTOMS",
-        amountUSD: overallCustomsValue,
-        description: "Ручная общая сумма растаможки из Excel-окна",
+        amountUSD: effectiveOverallCustomsUSD,
+        description:
+          derivedOverallCustomsUSD > 0
+            ? "Растаможка рассчитана из колонки TRANSPORTGA × количество"
+            : "Ручная общая сумма растаможки из Excel-окна",
       });
     }
     return JSON.stringify(payload);
-  }, [expenseRows, overallCustomsUSD]);
+  }, [derivedOverallCustomsUSD, effectiveOverallCustomsUSD, expenseRows]);
 
   const productTotals = useMemo(() => {
     return rows.reduce(
@@ -423,13 +439,12 @@ export function CreateContainerExcelPage({
       },
       { road: 0, customs: 0, all: 0 },
     );
-    const overallCustomsValue = toNumber(overallCustomsUSD);
-    if (overallCustomsValue > 0) {
-      totals.customs += overallCustomsValue;
-      totals.all += overallCustomsValue;
+    if (effectiveOverallCustomsUSD > 0) {
+      totals.customs += effectiveOverallCustomsUSD;
+      totals.all += effectiveOverallCustomsUSD;
     }
     return totals;
-  }, [expenseRows, overallCustomsUSD]);
+  }, [effectiveOverallCustomsUSD, expenseRows]);
 
   const investedTotal = useMemo(
     () => investmentRows.reduce((sum, row) => sum + toNumber(row.investedAmountUSD), 0),
@@ -690,6 +705,7 @@ export function CreateContainerExcelPage({
       const localNameCol = findCol((value) => value === "osso name");
       const priceCnyCol = findCol((value) => value.includes("unit price"));
       const sizeCol = findCol((value) => value === "saize" || value === "size");
+      const colorCol = findCol((value) => value === "product color");
       const totalAmountCnyCol = amountCols.find((col) => col > quantityCol) ?? 0;
       const cbmCol = findCol((value) => value === "cbm");
       const kgCol = findCol((value) => value === "kg");
@@ -697,6 +713,7 @@ export function CreateContainerExcelPage({
       const totalNwKgsCol = findCol((value) => value.includes("total n.w. kgs"));
       const manualCustomsPerUnitCol = findCol(
         (value) =>
+          value === "transportga" ||
           value === "rastamojka 1 sht" ||
           value === "rastamojka 1sht" ||
           value === "растаможка 1 шт" ||
@@ -732,6 +749,7 @@ export function CreateContainerExcelPage({
         const localName = localNameCol ? getWorksheetCellText(row.getCell(localNameCol).value) : "";
         const priceCNY = priceCnyCol ? getWorksheetCellText(row.getCell(priceCnyCol).value) : "";
         const saize = sizeCol ? getWorksheetCellText(row.getCell(sizeCol).value) : "";
+        const color = colorCol ? getWorksheetCellText(row.getCell(colorCol).value) : "";
         const quantity = quantityCol ? getWorksheetCellText(row.getCell(quantityCol).value) : "";
         const totalAmountCNY = totalAmountCnyCol ? getWorksheetCellText(row.getCell(totalAmountCnyCol).value) : "";
         const cbm = cbmCol ? getWorksheetCellText(row.getCell(cbmCol).value) : "";
@@ -754,7 +772,7 @@ export function CreateContainerExcelPage({
           localName,
           priceCNY,
           saize,
-          color: "",
+          color,
           quantity,
           totalAmountCNY,
           cbm,
@@ -956,6 +974,7 @@ export function CreateContainerExcelPage({
         "PICTURE / 图片",
         "UNIT PRICE",
         "SAIZE",
+        "Product color",
         "QUANTITY ( SET )",
         "TOTAL AMOUNT",
         "CBM",
@@ -967,10 +986,15 @@ export function CreateContainerExcelPage({
         "Y - $",
         "TOTAL AMOUNT",
         averageColumnLabel,
-        "RASTAMOJKA 1 SHT",
         logisticsColumnLabel,
         "BIR DONASI",
         "JAMI",
+        "TRANSPORTGA",
+        "TOTAL AMOUNT TRANSPORTGA",
+        "RASTAMOJKAGA",
+        "TOTAL AMOUNT RASTAMOJKAGA",
+        "TOTAL AMOUNT",
+        "TOTAL AMOUNT ALL CONTEYNERS",
       ];
       sheet.addRow(headers);
       for (const row of rows) {
@@ -991,6 +1015,7 @@ export function CreateContainerExcelPage({
           product?.imagePath ? "IMAGE" : "",
           row.priceCNY,
           row.saize,
+          row.color,
           row.quantity,
           row.totalAmountCNY || calcTotalAmountCny(row),
           row.cbm,
@@ -1002,12 +1027,17 @@ export function CreateContainerExcelPage({
           metrics.unitUsdValue > 0 ? Number(metrics.unitUsdValue.toFixed(2)) : "",
           metrics.productTotalValue > 0 ? Number(metrics.productTotalValue.toFixed(2)) : "",
           metrics.averagePercentValue > 0 ? Number(metrics.averagePercentValue.toFixed(2)) : "",
+          metrics.logisticsAverageValue > 0 ? Number(metrics.logisticsAverageValue.toFixed(2)) : "",
+          metrics.perUnitTotalValue > 0 ? Number(metrics.perUnitTotalValue.toFixed(2)) : "",
+          metrics.grandTotalValue > 0 ? Number(metrics.grandTotalValue.toFixed(2)) : "",
           toNumber(row.manualCustomsPerUnitUSD) > 0
             ? Number(toNumber(row.manualCustomsPerUnitUSD).toFixed(2))
             : metrics.totalCustomsUsd > 0 && metrics.quantity > 0
               ? Number((metrics.totalCustomsUsd / metrics.quantity).toFixed(2))
               : "",
-          metrics.logisticsAverageValue > 0 ? Number(metrics.logisticsAverageValue.toFixed(2)) : "",
+          metrics.totalCustomsUsd > 0 ? Number(metrics.totalCustomsUsd.toFixed(2)) : "",
+          metrics.totalTransportUsd > 0 && metrics.quantity > 0 ? Number((metrics.totalTransportUsd / metrics.quantity).toFixed(2)) : "",
+          metrics.totalTransportUsd > 0 ? Number(metrics.totalTransportUsd.toFixed(2)) : "",
           metrics.perUnitTotalValue > 0 ? Number(metrics.perUnitTotalValue.toFixed(2)) : "",
           metrics.grandTotalValue > 0 ? Number(metrics.grandTotalValue.toFixed(2)) : "",
         ]);
@@ -1029,12 +1059,12 @@ export function CreateContainerExcelPage({
       for (const row of expenseRows) {
         expensesSheet.addRow([row.title, row.category, row.amountUSD, row.description]);
       }
-      if (toNumber(overallCustomsUSD) > 0) {
+      if (effectiveOverallCustomsUSD > 0) {
         expensesSheet.addRow([
           "Растаможка (общая)",
           "CUSTOMS",
-          Number(toNumber(overallCustomsUSD).toFixed(2)),
-          "Ручная общая сумма из Excel-окна",
+          Number(effectiveOverallCustomsUSD.toFixed(2)),
+          derivedOverallCustomsUSD > 0 ? "Из TRANSPORTGA × количество" : "Ручная общая сумма из Excel-окна",
         ]);
       }
       expensesSheet.columns = [{ width: 32 }, { width: 18 }, { width: 16 }, { width: 40 }];
@@ -1080,10 +1110,15 @@ export function CreateContainerExcelPage({
       sheet.getCell("N5").value = "Y - $";
       sheet.getCell("O5").value = "TOTAL AMOUNT";
       sheet.getCell("P5").value = averageColumnLabel;
-      sheet.getCell("Q5").value = "RASTAMOJKA 1 SHT";
-      sheet.getCell("R5").value = logisticsColumnLabel;
-      sheet.getCell("S5").value = "BIR DONASI";
-      sheet.getCell("T5").value = "JAMI";
+      sheet.getCell("Q5").value = logisticsColumnLabel;
+      sheet.getCell("R5").value = "BIR DONASI";
+      sheet.getCell("S5").value = "JAMI";
+      sheet.getCell("U5").value = "TRANSPORTGA";
+      sheet.getCell("V5").value = "TOTAL AMOUNT TRANSPORTGA";
+      sheet.getCell("W5").value = "RASTAMOJKAGA";
+      sheet.getCell("X5").value = "TOTAL AMOUNT RASTAMOJKAGA";
+      sheet.getCell("Y5").value = "TOTAL AMOUNT";
+      sheet.getCell("Z5").value = "TOTAL AMOUNT ALL CONTEYNERS";
 
       const headers = [
         "FACTORI NAME",
@@ -1091,6 +1126,7 @@ export function CreateContainerExcelPage({
         "PICTURE / 图片",
         "UNIT PRICE",
         "SAIZE",
+        "Product color",
         "QUANTITY ( SET )",
         "TOTAL AMOUNT",
         "CBM",
@@ -1102,38 +1138,55 @@ export function CreateContainerExcelPage({
         "Y - $",
         "TOTAL AMOUNT",
         averageColumnLabel,
-        "RASTAMOJKA 1 SHT",
         logisticsColumnLabel,
         "BIR DONASI",
         "JAMI",
+        "TRANSPORTGA",
+        "TOTAL AMOUNT TRANSPORTGA",
+        "RASTAMOJKAGA",
+        "TOTAL AMOUNT RASTAMOJKAGA",
+        "TOTAL AMOUNT",
+        "TOTAL AMOUNT ALL CONTEYNERS",
       ];
       sheet.getRow(6).values = headers;
 
       const exampleRows = [
-        ["FACTORY-001", "OSSO-001", "", 70, "610*480*160", 30, 2100, 0.055, 14, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", "", "", "", "", "", "", ""],
-        ["FACTORY-002", "OSSO-002", "", 80, "710*480*160", 20, 1600, 0.064, 16, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", "", "", "", "", "", "", ""],
+        ["FACTORY-001", "OSSO-001", "", 70, "610*480*160", "Glossy white", 30, 2100, 0.055, 14, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["FACTORY-002", "OSSO-002", "", 80, "710*480*160", "Glossy white", 20, 1600, 0.064, 16, "", "", "DALEE", rate ? Number(rate) : defaultRate ?? "", "", "", "", "", "", "", "", "", "", "", "", ""],
       ];
       for (const values of exampleRows) sheet.addRow(values);
 
       for (let rowNumber = 7; rowNumber <= 80; rowNumber += 1) {
         const row = sheet.getRow(rowNumber);
         if (!row.getCell(7).value) continue;
-        row.getCell(10).value = { formula: `F${rowNumber}*H${rowNumber}` };
-        row.getCell(11).value = { formula: `F${rowNumber}*I${rowNumber}` };
+        row.getCell(11).value = { formula: `G${rowNumber}*I${rowNumber}` };
+        row.getCell(12).value = { formula: `G${rowNumber}*J${rowNumber}` };
         row.getCell(14).value = { formula: `D${rowNumber}*M${rowNumber}` };
-        row.getCell(15).value = { formula: `G${rowNumber}*M${rowNumber}` };
+        row.getCell(15).value = { formula: `H${rowNumber}*M${rowNumber}` };
         if (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
-          row.getCell(16).value = { formula: `IF(AND(H${rowNumber}>0,F${rowNumber}>0),H${rowNumber}*85.714653,"")` };
-          row.getCell(17).value = { formula: `IF(F${rowNumber}>0,${getCustomsFormulaForExcel(rowNumber)},"")` };
-          row.getCell(18).value = { formula: `IF(F${rowNumber}=0,0,P${rowNumber}+Q${rowNumber})` };
-          row.getCell(19).value = { formula: `IF(F${rowNumber}=0,0,N${rowNumber}+R${rowNumber})` };
-          row.getCell(20).value = { formula: `IF(F${rowNumber}=0,0,S${rowNumber}*F${rowNumber})` };
+          row.getCell(16).value = { formula: `IF($O$81=0,0,O${rowNumber}/$O$81*100)` };
+          row.getCell(17).value = { formula: `IF(AND(I${rowNumber}>0,G${rowNumber}>0),I${rowNumber}*85.714653,"")` };
+          row.getCell(18).value = { formula: `IF(G${rowNumber}=0,0,N${rowNumber}+Q${rowNumber})` };
+          row.getCell(19).value = { formula: `IF(G${rowNumber}=0,0,R${rowNumber}*G${rowNumber})` };
+          row.getCell(20).value = { formula: `IF(G${rowNumber}>0,${getCustomsFormulaForExcel(rowNumber)},"")` };
+          row.getCell(21).value = { formula: `IF(G${rowNumber}=0,0,T${rowNumber}*G${rowNumber})` };
+          row.getCell(22).value = { formula: `Q${rowNumber}` };
+          row.getCell(23).value = { formula: `S${rowNumber}` };
+          row.getCell(24).value = { formula: `R${rowNumber}` };
+          row.getCell(25).value = { formula: `IF(G${rowNumber}=0,0,N${rowNumber}+R${rowNumber}+T${rowNumber})` };
+          row.getCell(26).value = { formula: `IF(G${rowNumber}=0,0,Y${rowNumber}*G${rowNumber})` };
         } else {
           row.getCell(16).value = { formula: `IF($O$81=0,0,O${rowNumber}/$O$81*100)` };
-          row.getCell(17).value = "";
-          row.getCell(18).value = { formula: `P${rowNumber}/100*$R$81` };
-          row.getCell(19).value = { formula: `IF(G${rowNumber}=0,0,(O${rowNumber}+R${rowNumber})/G${rowNumber})` };
-          row.getCell(20).value = { formula: `O${rowNumber}+R${rowNumber}` };
+          row.getCell(17).value = { formula: `IF($O$81=0,0,$W$81*P${rowNumber}/100/G${rowNumber})` };
+          row.getCell(18).value = { formula: `IF(G${rowNumber}=0,0,Q${rowNumber}+U${rowNumber})` };
+          row.getCell(19).value = { formula: `IF($O$81=0,0,$U$81*P${rowNumber}/100)` };
+          row.getCell(20).value = { formula: `IF($O$81=0,0,$T$81*P${rowNumber}/100/G${rowNumber})` };
+          row.getCell(21).value = { formula: `IF($O$81=0,0,$T$81*P${rowNumber}/100)` };
+          row.getCell(22).value = { formula: `Q${rowNumber}` };
+          row.getCell(23).value = { formula: `S${rowNumber}` };
+          row.getCell(24).value = { formula: `R${rowNumber}` };
+          row.getCell(25).value = { formula: `IF(G${rowNumber}=0,0,(O${rowNumber}+U${rowNumber}+W${rowNumber})/G${rowNumber})` };
+          row.getCell(26).value = { formula: `O${rowNumber}+U${rowNumber}+W${rowNumber}` };
         }
       }
 
@@ -1141,28 +1194,20 @@ export function CreateContainerExcelPage({
       sheet.getCell("J80").value = "TOTAL CBM";
       sheet.getCell("K80").value = "TOTAL N.W. KGS";
       sheet.getCell("O80").value = "TOTAL AMOUNT";
-      sheet.getCell("Q80").value = "RASTAMOJKA 1 SHT";
-      sheet.getCell("R80").value = activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? "YOLGA + RASTAMOJKA" : "YOLGA + RASTAMOJKA";
+      sheet.getCell("V80").value = "TOTAL AMOUNT TRANSPORTGA";
+      sheet.getCell("X80").value = "TOTAL AMOUNT RASTAMOJKAGA";
+      sheet.getCell("Z80").value = "TOTAL AMOUNT ALL CONTEYNERS";
       sheet.getCell("I81").value = { formula: "SUM(G7:G79)" };
-      sheet.getCell("J81").value = { formula: "SUM(J7:J79)" };
-      sheet.getCell("K81").value = { formula: "SUM(K7:K79)" };
+      sheet.getCell("J81").value = { formula: "SUM(K7:K79)" };
+      sheet.getCell("K81").value = { formula: "SUM(L7:L79)" };
       sheet.getCell("O81").value = { formula: "SUM(O7:O79)" };
-      sheet.getCell("Q81").value =
-        activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2
-          ? "по типу товара"
-          : totalLogisticsAndCustoms > 0
-            ? Number(totalLogisticsAndCustoms.toFixed(2))
-            : 0;
-      sheet.getCell("R81").value =
-        activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2
-          ? "P + Q"
-          : totalLogisticsAndCustoms > 0
-            ? Number(totalLogisticsAndCustoms.toFixed(2))
-            : 0;
+      sheet.getCell("V81").value = { formula: "SUM(V7:V79)" };
+      sheet.getCell("X81").value = { formula: "SUM(X7:X79)" };
+      sheet.getCell("Z81").value = { formula: "SUM(Z7:Z79)" };
 
       const expensesSheet = workbook.addWorksheet("Расходы");
       expensesSheet.addRow(["Название", "Категория", "Сумма USD", "Комментарий"]);
-      expensesSheet.addRow(["Растаможка", "CUSTOMS", overallCustomsUSD ? Number(toNumber(overallCustomsUSD).toFixed(2)) : "", ""]);
+      expensesSheet.addRow(["Растаможка", "CUSTOMS", effectiveOverallCustomsUSD ? Number(effectiveOverallCustomsUSD.toFixed(2)) : "", derivedOverallCustomsUSD > 0 ? "Из TRANSPORTGA × количество" : ""]);
       expensesSheet.addRow(["Доставка", "LOGISTICS", "", ""]);
       expensesSheet.addRow(["Склад", "STORAGE", "", ""]);
       expensesSheet.columns = [
@@ -1591,6 +1636,11 @@ export function CreateContainerExcelPage({
     id:
       | keyof GridRow
       | "picture"
+      | "transportUnit"
+      | "customsUnit"
+      | "customsTotal"
+      | "finalTotalAmount"
+      | "finalTotalAllContainers"
       | "productTotal"
       | "productTotalCny"
       | "costPriceUSD"
@@ -1607,13 +1657,9 @@ export function CreateContainerExcelPage({
     { id: "factoryName", label: "FACTORI NAME", width: "min-w-[250px]" },
     { id: "localName", label: "OSSO NAME", width: "min-w-[180px]" },
     { id: "picture", label: "PICTURE / 图片", width: "min-w-[140px]" },
-    { id: "productTotal", label: "ОБЩАЯ СУММА ТОВАРА", width: "min-w-[180px]" },
-    { id: "productTotalCny", label: "СУММА В ЮАНЯХ", width: "min-w-[170px]" },
-    { id: "costPriceUSD", label: "СЕБЕСТОИМОСТЬ", width: "min-w-[170px]" },
-    { id: "salePriceUSD", label: "ЦЕНА ПРОДАЖИ", width: "min-w-[170px]" },
-    { id: "saleTotalUSD", label: "ОБЩЕЕ ПО КОЛИЧЕСТВУ", width: "min-w-[190px]" },
     { id: "priceCNY", label: "UNIT PRICE", width: "min-w-[170px]" },
     { id: "saize", label: "SAIZE", width: "min-w-[230px]" },
+    { id: "color", label: "Product color", width: "min-w-[170px]" },
     { id: "quantity", label: "QUANTITY ( SET )", width: "min-w-[170px]" },
     { id: "totalAmountCNY", label: "TOTAL AMOUNT", width: "min-w-[190px]" },
     { id: "cbm", label: "CBM", width: "min-w-[140px]" },
@@ -1628,7 +1674,6 @@ export function CreateContainerExcelPage({
       label: getAverageColumnLabel(activeCostingRuleMode),
       width: "min-w-[160px]",
     },
-    { id: "manualCustomsPerUnitUSD", label: "RASTAMOJKA 1 SHT", width: "min-w-[170px]" },
     {
       id: "logisticsAverage",
       label: getLogisticsColumnLabel(activeCostingRuleMode),
@@ -1636,6 +1681,17 @@ export function CreateContainerExcelPage({
     },
     { id: "perUnitTotal", label: "BIR DONASI", width: "min-w-[150px]" },
     { id: "grandTotal", label: "JAMI", width: "min-w-[150px]" },
+    { id: "manualCustomsPerUnitUSD", label: "TRANSPORTGA", width: "min-w-[160px]" },
+    { id: "transportUnit", label: "TOTAL AMOUNT TRANSPORTGA", width: "min-w-[210px]" },
+    { id: "customsUnit", label: "RASTAMOJKAGA", width: "min-w-[170px]" },
+    { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA", width: "min-w-[230px]" },
+    { id: "finalTotalAmount", label: "TOTAL AMOUNT", width: "min-w-[180px]" },
+    { id: "finalTotalAllContainers", label: "TOTAL AMOUNT ALL CONTEYNERS", width: "min-w-[260px]" },
+    { id: "productTotal", label: "ОБЩАЯ СУММА ТОВАРА", width: "min-w-[180px]" },
+    { id: "productTotalCny", label: "СУММА В ЮАНЯХ", width: "min-w-[170px]" },
+    { id: "costPriceUSD", label: "СЕБЕСТОИМОСТЬ", width: "min-w-[170px]" },
+    { id: "salePriceUSD", label: "ЦЕНА ПРОДАЖИ", width: "min-w-[170px]" },
+    { id: "saleTotalUSD", label: "ОБЩЕЕ ПО КОЛИЧЕСТВУ", width: "min-w-[190px]" },
   ];
 
   const investmentColumns: Array<{ id: keyof InvestmentRow; label: string; width: string }> = [
@@ -1816,6 +1872,11 @@ export function CreateContainerExcelPage({
                   const pasteableCols = columns.filter(
                     (c) =>
                       c.id !== "picture" &&
+                      c.id !== "transportUnit" &&
+                      c.id !== "customsUnit" &&
+                      c.id !== "customsTotal" &&
+                      c.id !== "finalTotalAmount" &&
+                      c.id !== "finalTotalAllContainers" &&
                       c.id !== "productTotal" &&
                       c.id !== "productTotalCny" &&
                       c.id !== "costPriceUSD" &&
@@ -1861,6 +1922,11 @@ export function CreateContainerExcelPage({
                           );
                         }
                         if (
+                          c.id === "transportUnit" ||
+                          c.id === "customsUnit" ||
+                          c.id === "customsTotal" ||
+                          c.id === "finalTotalAmount" ||
+                          c.id === "finalTotalAllContainers" ||
                           c.id === "productTotal" ||
                           c.id === "productTotalCny" ||
                           c.id === "costPriceUSD" ||
@@ -1873,7 +1939,19 @@ export function CreateContainerExcelPage({
                           c.id === "grandTotal"
                         ) {
                           const value = Number(
-                            c.id === "productTotal"
+                            c.id === "transportUnit"
+                              ? metrics.totalCustomsUsd
+                              : c.id === "customsUnit"
+                                ? metrics.quantity > 0
+                                  ? metrics.totalTransportUsd / metrics.quantity
+                                  : 0
+                              : c.id === "customsTotal"
+                                ? metrics.totalTransportUsd
+                              : c.id === "finalTotalAmount"
+                                ? metrics.perUnitTotalValue
+                              : c.id === "finalTotalAllContainers"
+                                ? metrics.grandTotalValue
+                              : c.id === "productTotal"
                               ? metrics.productTotalValue
                               : c.id === "productTotalCny"
                                 ? metrics.productTotalCnyValue

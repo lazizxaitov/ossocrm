@@ -193,13 +193,37 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
         logisticsAverage: metrics.extraPerUnitUsd,
         birDonasi: metrics.finalUnitCostUsd,
         jami: metrics.finalTotalCostUsd,
+        transportUnit: metrics.transportPerUnitUsd,
+        transportTotal: metrics.totalTransportUsd,
+        customsUnit: quantity > 0 ? metrics.totalCustomsUsd / quantity : 0,
+        customsTotal: metrics.totalCustomsUsd,
+        finalUnitTotal: metrics.finalUnitCostUsd,
+        finalGrandTotal: metrics.finalTotalCostUsd,
       };
     }
     const averagePercent = totals.totalAmountUSD > 0 ? (totalAmountUsd / totals.totalAmountUSD) * 100 : 0;
+    const transportTotal = toNumber(logisticsUsd) > 0 ? (toNumber(logisticsUsd) * averagePercent) / 100 : 0;
+    const customsTotal = toNumber(customsUsd) > 0 ? (toNumber(customsUsd) * averagePercent) / 100 : 0;
+    const transportUnit = quantity > 0 ? transportTotal / quantity : 0;
+    const customsUnit = quantity > 0 ? customsTotal / quantity : 0;
     const logisticsAverage = sharedExtraCostsUsd > 0 ? (sharedExtraCostsUsd * averagePercent) / 100 : 0;
     const birDonasi = quantity > 0 ? (totalAmountUsd + logisticsAverage) / quantity : 0;
     const jami = totalAmountUsd + logisticsAverage;
-    return { quantity, totalAmountUsd, unitUsd, averagePercent, logisticsAverage, birDonasi, jami };
+    return {
+      quantity,
+      totalAmountUsd,
+      unitUsd,
+      averagePercent,
+      logisticsAverage,
+      birDonasi,
+      jami,
+      transportUnit,
+      transportTotal,
+      customsUnit,
+      customsTotal,
+      finalUnitTotal: birDonasi,
+      finalGrandTotal: jami,
+    };
   }
 
   function updateRow(key: number, patch: Partial<GridRow>) {
@@ -300,6 +324,12 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
         logisticsColumnLabel,
         "BIR DONASI",
         "JAMI",
+        "TRANSPORTGA",
+        "TOTAL AMOUNT TRANSPORTGA",
+        "RASTAMOJKAGA",
+        "TOTAL AMOUNT RASTAMOJKAGA",
+        "TOTAL AMOUNT",
+        "TOTAL AMOUNT ALL CONTEYNERS",
         "Категория",
         "Описание",
         "Цена продажи USD",
@@ -325,6 +355,12 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
           row.exchangeRate ? toNumber(row.exchangeRate) : "",
           "",
           row.totalAmountUSD ? toNumber(row.totalAmountUSD) : "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
           "",
           "",
           "",
@@ -607,6 +643,12 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
               </th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">BIR DONASI</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">JAMI</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TRANSPORTGA</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT TRANSPORTGA</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">RASTAMOJKAGA</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT RASTAMOJKAGA</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT</th>
+              <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold uppercase tracking-[0.08em]">TOTAL AMOUNT ALL CONTEYNERS</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Категория</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Описание</th>
               <th className="border-b-2 border-r border-slate-400 px-3 py-4 text-center text-[15px] font-semibold">Цена продажи USD</th>
@@ -768,6 +810,24 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
                 </td>
                 <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
                   {formatValue(metrics.jami)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(metrics.transportUnit)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(metrics.transportTotal)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(metrics.customsUnit)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(metrics.customsTotal)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(metrics.finalUnitTotal)}
+                </td>
+                <td className="border-b border-r border-slate-300 bg-white px-3 py-2 text-center font-medium text-slate-700">
+                  {formatValue(metrics.finalGrandTotal)}
                 </td>
                 <td className="border-b border-r border-slate-300 px-3 py-2">
                   <select
