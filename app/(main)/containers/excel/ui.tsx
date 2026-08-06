@@ -7,7 +7,9 @@ import {
   buildCustomsFallbackPerUnitMap,
   calculateV2Costing,
   COSTING_RULE_MODES,
+  getCostingConfigFromControl,
   resolveCostingRuleMode,
+  type CostingConfig,
 } from "@/lib/costing-rules";
 
 type ProductOption = {
@@ -199,7 +201,7 @@ function getLogisticsColumnLabel(mode: string) {
 }
 
 function getCustomsFormulaForExcel(rowNumber: number) {
-  return `IF(OR(ISNUMBER(SEARCH("sifon",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("сифон",A${rowNumber}&" "&B${rowNumber}))),0.82,IF(OR(ISNUMBER(SEARCH("smesitel",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("смес",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mixer",A${rowNumber}&" "&B${rowNumber}))),1.47,IF(OR(ISNUMBER(SEARCH("unitaz",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("унитаз",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("toilet",A${rowNumber}&" "&B${rowNumber}))),18.81,IF(OR(ISNUMBER(SEARCH("rakovina",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("раков",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("sink",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("washbasin",A${rowNumber}&" "&B${rowNumber}))),6.65,0))))`;
+  return `IF(OR(ISNUMBER(SEARCH("sifon",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("сифон",A${rowNumber}&" "&B${rowNumber}))),V$4,IF(OR(ISNUMBER(SEARCH("smesitel",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("смес",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mixer",A${rowNumber}&" "&B${rowNumber}))),W$4,IF(OR(ISNUMBER(SEARCH("unitaz",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("унитаз",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("toilet",A${rowNumber}&" "&B${rowNumber}))),U$4,IF(OR(ISNUMBER(SEARCH("rakovina",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("раков",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("sink",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("washbasin",A${rowNumber}&" "&B${rowNumber}))),T$4,IF(OR(ISNUMBER(SEARCH("oyna",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mirror",A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("зеркал",A${rowNumber}&" "&B${rowNumber}))),X$4,0)))))`;
 }
 
 function computeRowMetrics({
@@ -211,6 +213,7 @@ function computeRowMetrics({
   totalProductUsd,
   manualCustomsPerUnitUsd,
   fallbackCustomsPerUnitUsd,
+  costingConfig,
 }: {
   row: GridRow;
   product: ProductOption | null;
@@ -220,6 +223,7 @@ function computeRowMetrics({
   totalProductUsd: number;
   manualCustomsPerUnitUsd?: number | null;
   fallbackCustomsPerUnitUsd?: number | null;
+  costingConfig?: Partial<CostingConfig> | null;
 }) {
   const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
   const baseUnitUsd =
@@ -240,6 +244,7 @@ function computeRowMetrics({
       sku: row.factoryName || product?.sku,
       manualCustomsPerUnitUsd,
       fallbackCustomsPerUnitUsd,
+      costingConfig,
     });
     return {
       quantity,
@@ -285,11 +290,13 @@ export function CreateContainerExcelPage({
   products,
   investors,
   costingRuleMode,
+  costingConfig,
 }: {
   defaultRate: number | null;
   products: ProductOption[];
   investors: Array<{ id: string; name: string }>;
   costingRuleMode: string;
+  costingConfig?: Partial<CostingConfig>;
 }) {
   const todayIso = new Date().toISOString().slice(0, 10);
   const initialState: CreateContainerFormState = { error: null, success: false };
@@ -319,6 +326,7 @@ export function CreateContainerExcelPage({
   const [nextExpenseKey, setNextExpenseKey] = useState(2);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const activeCostingRuleMode = resolveCostingRuleMode(costingRuleMode);
+  const resolvedCostingConfig = useMemo(() => getCostingConfigFromControl(costingConfig), [costingConfig]);
 
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const productBySku = useMemo(() => new Map(products.map((p) => [p.sku.trim().toLowerCase(), p])), [products]);
@@ -472,7 +480,7 @@ export function CreateContainerExcelPage({
         }),
         totalCustomsUsd: expenseTotals.customs,
       }),
-    [rows, productMap, expenseTotals.customs],
+    [rows, productMap, expenseTotals.customs, resolvedCostingConfig],
   );
 
   const v2Totals = useMemo(() => {
@@ -488,6 +496,7 @@ export function CreateContainerExcelPage({
           totalProductUsd: productTotals.totalUsd,
           manualCustomsPerUnitUsd: toNumber(row.manualCustomsPerUnitUSD),
           fallbackCustomsPerUnitUsd: customsFallbackMap.get(row.key) ?? 0,
+          costingConfig: resolvedCostingConfig,
         });
         acc.transport += metrics.totalTransportUsd;
         acc.customs += metrics.totalCustomsUsd;
@@ -496,7 +505,7 @@ export function CreateContainerExcelPage({
       },
       { transport: 0, customs: 0, grandTotal: 0 },
     );
-  }, [rows, productMap, activeCostingRuleMode, expenseTotals.road, expenseTotals.customs, productTotals.totalUsd, customsFallbackMap]);
+  }, [rows, productMap, activeCostingRuleMode, expenseTotals.road, expenseTotals.customs, productTotals.totalUsd, customsFallbackMap, resolvedCostingConfig]);
 
   const summaryBlock = useMemo(() => {
     if (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
@@ -1008,6 +1017,7 @@ export function CreateContainerExcelPage({
           totalProductUsd: productTotals.totalUsd,
           manualCustomsPerUnitUsd: toNumber(row.manualCustomsPerUnitUSD),
           fallbackCustomsPerUnitUsd: customsFallbackMap.get(row.key) ?? 0,
+          costingConfig: resolvedCostingConfig,
         });
         sheet.addRow([
           row.factoryName,
@@ -1104,6 +1114,17 @@ export function CreateContainerExcelPage({
       sheet.getCell("A1").font = { bold: true, size: 16 };
       sheet.mergeCells("A1:E1");
 
+      sheet.getCell("T3").value = "RAKOVINAGA";
+      sheet.getCell("U3").value = "UNITAZGA";
+      sheet.getCell("V3").value = "SIFONGA";
+      sheet.getCell("W3").value = "SEMESITELGA";
+      sheet.getCell("X3").value = "OYNAGA";
+      sheet.getCell("T4").value = resolvedCostingConfig.customsRakovinaUsd;
+      sheet.getCell("U4").value = resolvedCostingConfig.customsUnitazUsd;
+      sheet.getCell("V4").value = resolvedCostingConfig.customsSifonUsd;
+      sheet.getCell("W4").value = resolvedCostingConfig.customsSmesitelUsd;
+      sheet.getCell("X4").value = resolvedCostingConfig.customsOynaUsd;
+      sheet.getCell("T5").value = resolvedCostingConfig.transportUsdPerCbm;
       sheet.getCell("I5").value = "TOTAL AMOUNT";
       sheet.getCell("J5").value = "TOTAL CBM";
       sheet.getCell("K5").value = "TOTAL N.W. KGS";
@@ -1839,7 +1860,17 @@ export function CreateContainerExcelPage({
         </form>
       </article>
 
-      <div className="grid min-h-0 grid-rows-[1fr_auto_auto] gap-4">
+      <div className="grid min-h-0 grid-rows-[auto_1fr_auto_auto] gap-4">
+        <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
+          <div className="grid gap-3 lg:grid-cols-5">
+            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Rakovinaga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsRakovinaUsd.toFixed(2)} USD</div></div>
+            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Unitazga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsUnitazUsd.toFixed(2)} USD</div></div>
+            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sifonga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsSifonUsd.toFixed(2)} USD</div></div>
+            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Smesitelga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsSmesitelUsd.toFixed(2)} USD</div></div>
+            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">1 m³ transport</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.transportUsdPerCbm.toFixed(6)} USD</div></div>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">Ставки меняются в разделе настроек и используются в формулах Excel как в файле AZIZGA.xlsx.</p>
+        </article>
         <article className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
           <div className="border-b border-[var(--border)] bg-white px-4 py-3">
             <div>
@@ -1897,6 +1928,7 @@ export function CreateContainerExcelPage({
                     totalProductUsd: productTotals.totalUsd,
                     manualCustomsPerUnitUsd: toNumber(r.manualCustomsPerUnitUSD),
                     fallbackCustomsPerUnitUsd: customsFallbackMap.get(r.key) ?? 0,
+                    costingConfig: resolvedCostingConfig,
                   });
                   const resolvedCustomsPerUnitValue =
                     metrics.totalCustomsUsd > 0 && metrics.quantity > 0 ? metrics.totalCustomsUsd / metrics.quantity : 0;

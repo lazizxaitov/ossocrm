@@ -425,6 +425,12 @@ model SystemControl {
   serverTimeZone           String   @default("UTC")
   manualSystemTime         DateTime?
   costingRuleMode          String   @default("LEGACY")
+  transportUsdPerCbm       Float    @default(85.714653)
+  customsRakovinaUsd       Float    @default(6.65)
+  customsUnitazUsd         Float    @default(18.81)
+  customsSifonUsd          Float    @default(0.82)
+  customsSmesitelUsd       Float    @default(1.47)
+  customsOynaUsd           Float    @default(0)
   updatedAt                DateTime @updatedAt
 }
 

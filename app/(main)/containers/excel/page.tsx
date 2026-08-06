@@ -29,7 +29,7 @@ export default async function CreateContainerExcelRoute() {
       },
     }),
     prisma.investor.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.systemControl.findUnique({ where: { id: 1 }, select: { costingRuleMode: true } }),
+    prisma.systemControl.findUnique({ where: { id: 1 }, select: { costingRuleMode: true, transportUsdPerCbm: true, customsRakovinaUsd: true, customsUnitazUsd: true, customsSifonUsd: true, customsSmesitelUsd: true, customsOynaUsd: true } }),
   ]);
 
   return (
@@ -68,6 +68,7 @@ export default async function CreateContainerExcelRoute() {
           }))}
           investors={investors}
           costingRuleMode={control?.costingRuleMode ?? "LEGACY"}
+          costingConfig={control ?? undefined}
         />
       </div>
     </section>

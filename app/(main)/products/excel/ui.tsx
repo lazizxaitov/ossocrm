@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { calculateV2Costing, COSTING_RULE_MODES, resolveCostingRuleMode } from "@/lib/costing-rules";
+import { calculateV2Costing, COSTING_RULE_MODES, getCostingConfigFromControl, resolveCostingRuleMode, type CostingConfig } from "@/lib/costing-rules";
 
 type ProductCategoryItem = {
   id: string;
@@ -34,6 +34,7 @@ type GridRow = {
 type CreateProductsExcelPageProps = {
   categories: ProductCategoryItem[];
   costingRuleMode: string;
+  costingConfig?: Partial<CostingConfig>;
 };
 
 function toNumber(value: string) {
@@ -97,7 +98,7 @@ function getLogisticsColumnLabel(mode: string) {
 }
 
 function getCustomsFormulaForProductExcel(rowNumber: number) {
-  return `IF(OR(ISNUMBER(SEARCH("sifon",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("сифон",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),0.82,IF(OR(ISNUMBER(SEARCH("smesitel",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("смес",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mixer",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),1.47,IF(OR(ISNUMBER(SEARCH("unitaz",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("унитаз",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("toilet",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),18.81,IF(OR(ISNUMBER(SEARCH("rakovina",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("раков",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("sink",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("washbasin",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),6.65,0))))`;
+  return `IF(OR(ISNUMBER(SEARCH("sifon",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("сифон",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),V$4,IF(OR(ISNUMBER(SEARCH("smesitel",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("смес",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mixer",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),W$4,IF(OR(ISNUMBER(SEARCH("unitaz",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("унитаз",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("toilet",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),U$4,IF(OR(ISNUMBER(SEARCH("rakovina",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("раков",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("sink",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("washbasin",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),T$4,IF(OR(ISNUMBER(SEARCH("oyna",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("mirror",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber})),ISNUMBER(SEARCH("зеркал",T${rowNumber}&" "&A${rowNumber}&" "&B${rowNumber}))),X$4,0)))))`;
 }
 
 function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
@@ -124,7 +125,7 @@ function makeEmptyRow(key: number, exchangeRate = ""): GridRow {
   };
 }
 
-export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateProductsExcelPageProps) {
+export function CreateProductsExcelPage({ categories, costingRuleMode, costingConfig }: CreateProductsExcelPageProps) {
   const [defaultRate, setDefaultRate] = useState("");
   const [logisticsUsd, setLogisticsUsd] = useState("");
   const [customsUsd, setCustomsUsd] = useState("");
@@ -140,6 +141,7 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
   const [success, setSuccess] = useState("");
   const tableWrapRef = useRef<HTMLDivElement | null>(null);
   const activeCostingRuleMode = resolveCostingRuleMode(costingRuleMode);
+  const resolvedCostingConfig = useMemo(() => getCostingConfigFromControl(costingConfig), [costingConfig]);
 
   const categoryOptions = useMemo(
     () => [{ value: "", label: "Без категории" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
@@ -184,6 +186,7 @@ export function CreateProductsExcelPage({ categories, costingRuleMode }: CreateP
         categoryName: categoryNameById.get(row.categoryId) ?? null,
         productName: row.localName,
         sku: row.factoryName,
+        costingConfig: resolvedCostingConfig,
       });
       return {
         quantity,

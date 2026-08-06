@@ -1,4 +1,27 @@
 export const TRANSPORT_USD_PER_CBM = 85.714653;
+export const DEFAULT_CUSTOMS_RAKOVINA_USD = 6.65;
+export const DEFAULT_CUSTOMS_UNITAZ_USD = 18.81;
+export const DEFAULT_CUSTOMS_SIFON_USD = 0.82;
+export const DEFAULT_CUSTOMS_SMESITEL_USD = 1.47;
+export const DEFAULT_CUSTOMS_OYNA_USD = 0;
+
+export type CostingConfig = {
+  transportUsdPerCbm: number;
+  customsRakovinaUsd: number;
+  customsUnitazUsd: number;
+  customsSifonUsd: number;
+  customsSmesitelUsd: number;
+  customsOynaUsd: number;
+};
+
+export const DEFAULT_COSTING_CONFIG: CostingConfig = {
+  transportUsdPerCbm: TRANSPORT_USD_PER_CBM,
+  customsRakovinaUsd: DEFAULT_CUSTOMS_RAKOVINA_USD,
+  customsUnitazUsd: DEFAULT_CUSTOMS_UNITAZ_USD,
+  customsSifonUsd: DEFAULT_CUSTOMS_SIFON_USD,
+  customsSmesitelUsd: DEFAULT_CUSTOMS_SMESITEL_USD,
+  customsOynaUsd: DEFAULT_CUSTOMS_OYNA_USD,
+};
 
 export const COSTING_RULE_MODES = {
   LEGACY: "LEGACY",
@@ -22,6 +45,7 @@ type PurchaseInput = {
 type CustomsOverrideInput = ProductClassifierInput & {
   manualCustomsPerUnitUsd?: number | null;
   fallbackCustomsPerUnitUsd?: number | null;
+  costingConfig?: Partial<CostingConfig> | null;
 };
 
 function normalizeText(value: string | null | undefined) {
@@ -37,16 +61,38 @@ export function resolveCostingRuleMode(raw: string | null | undefined): CostingR
     : COSTING_RULE_MODES.LEGACY;
 }
 
-export function getCustomsRateUsdPerUnit(input: ProductClassifierInput) {
+function toPositiveNumber(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export function resolveCostingConfig(config?: Partial<CostingConfig> | null): CostingConfig {
+  return {
+    transportUsdPerCbm: toPositiveNumber(config?.transportUsdPerCbm, DEFAULT_COSTING_CONFIG.transportUsdPerCbm),
+    customsRakovinaUsd: toPositiveNumber(config?.customsRakovinaUsd, DEFAULT_COSTING_CONFIG.customsRakovinaUsd),
+    customsUnitazUsd: toPositiveNumber(config?.customsUnitazUsd, DEFAULT_COSTING_CONFIG.customsUnitazUsd),
+    customsSifonUsd: toPositiveNumber(config?.customsSifonUsd, DEFAULT_COSTING_CONFIG.customsSifonUsd),
+    customsSmesitelUsd: toPositiveNumber(config?.customsSmesitelUsd, DEFAULT_COSTING_CONFIG.customsSmesitelUsd),
+    customsOynaUsd: toPositiveNumber(config?.customsOynaUsd, DEFAULT_COSTING_CONFIG.customsOynaUsd),
+  };
+}
+
+export function getCostingConfigFromControl(control: Partial<CostingConfig> | null | undefined): CostingConfig {
+  return resolveCostingConfig(control);
+}
+
+export function getCustomsRateUsdPerUnit(input: ProductClassifierInput, config?: Partial<CostingConfig> | null) {
   const haystack = [input.categoryName, input.productName, input.sku]
     .map(normalizeText)
     .join(" | ");
+  const resolved = resolveCostingConfig(config);
 
   if (!haystack) return 0;
-  if (haystack.includes("sifon") || haystack.includes("сифон")) return 0.82;
-  if (haystack.includes("smesitel") || haystack.includes("смесител") || haystack.includes("mixer")) return 1.47;
-  if (haystack.includes("unitaz") || haystack.includes("унитаз") || haystack.includes("toilet")) return 18.81;
-  if (haystack.includes("rakovina") || haystack.includes("раковин") || haystack.includes("sink") || haystack.includes("washbasin")) return 6.65;
+  if (haystack.includes("sifon") || haystack.includes("сифон")) return resolved.customsSifonUsd;
+  if (haystack.includes("smesitel") || haystack.includes("смесител") || haystack.includes("mixer")) return resolved.customsSmesitelUsd;
+  if (haystack.includes("unitaz") || haystack.includes("унитаз") || haystack.includes("toilet")) return resolved.customsUnitazUsd;
+  if (haystack.includes("rakovina") || haystack.includes("раковин") || haystack.includes("sink") || haystack.includes("washbasin")) return resolved.customsRakovinaUsd;
+  if (haystack.includes("oyna") || haystack.includes("mirror") || haystack.includes("зеркал")) return resolved.customsOynaUsd;
   return 0;
 }
 
@@ -74,7 +120,7 @@ export function resolveCustomsPerUnitUsd(input: CustomsOverrideInput) {
     return manualCustomsPerUnitUsd;
   }
 
-  const autoCustomsPerUnitUsd = getCustomsRateUsdPerUnit(input);
+  const autoCustomsPerUnitUsd = getCustomsRateUsdPerUnit(input, input.costingConfig);
   if (autoCustomsPerUnitUsd > 0) {
     return autoCustomsPerUnitUsd;
   }
@@ -93,6 +139,7 @@ export function buildCustomsFallbackPerUnitMap<TId extends string | number>(inpu
       ProductClassifierInput
   >;
   totalCustomsUsd: number;
+  costingConfig?: Partial<CostingConfig> | null;
 }) {
   const totalCustomsUsd = Number(input.totalCustomsUsd ?? 0);
   const fallbackMap = new Map<TId, number>();
@@ -105,6 +152,7 @@ export function buildCustomsFallbackPerUnitMap<TId extends string | number>(inpu
         productName: item.productName,
         sku: item.sku,
         manualCustomsPerUnitUsd: item.manualCustomsPerUnitUsd,
+        costingConfig: input.costingConfig,
       });
       const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
       if (resolved > 0 || quantity <= 0) return null;
@@ -134,12 +182,14 @@ export function calculateV2Costing(input: {
   sku?: string | null;
   manualCustomsPerUnitUsd?: number | null;
   fallbackCustomsPerUnitUsd?: number | null;
+  costingConfig?: Partial<CostingConfig> | null;
 }) {
   const quantity = Math.max(0, Math.floor(Number(input.quantity) || 0));
   const baseUnitUsd = getUnitPurchaseUsd(input);
   const baseTotalUsd = getLinePurchaseUsd(input);
   const cbmPerUnit = Number(input.cbmPerUnit ?? 0);
-  const transportPerUnitUsd = Number.isFinite(cbmPerUnit) && cbmPerUnit > 0 ? cbmPerUnit * TRANSPORT_USD_PER_CBM : 0;
+  const costingConfig = resolveCostingConfig(input.costingConfig);
+  const transportPerUnitUsd = Number.isFinite(cbmPerUnit) && cbmPerUnit > 0 ? cbmPerUnit * costingConfig.transportUsdPerCbm : 0;
   const customsPerUnitUsd = resolveCustomsPerUnitUsd(input);
   const extraPerUnitUsd = transportPerUnitUsd + customsPerUnitUsd;
   const totalTransportUsd = quantity > 0 ? transportPerUnitUsd * quantity : 0;

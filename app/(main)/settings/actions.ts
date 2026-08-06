@@ -310,6 +310,64 @@ export async function updateAutoLogoutTimerAction(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+export async function updateCostingRatesAction(formData: FormData) {
+  const session = await getRequiredSession();
+  if (session.role !== Role.SUPER_ADMIN) {
+    throw new Error("Изменение ставок доступно только суперадминистратору.");
+  }
+
+  const transportUsdPerCbm = Math.max(0, Number(formData.get("transportUsdPerCbm") ?? 0));
+  const customsRakovinaUsd = Math.max(0, Number(formData.get("customsRakovinaUsd") ?? 0));
+  const customsUnitazUsd = Math.max(0, Number(formData.get("customsUnitazUsd") ?? 0));
+  const customsSifonUsd = Math.max(0, Number(formData.get("customsSifonUsd") ?? 0));
+  const customsSmesitelUsd = Math.max(0, Number(formData.get("customsSmesitelUsd") ?? 0));
+  const customsOynaUsd = Math.max(0, Number(formData.get("customsOynaUsd") ?? 0));
+
+  await prisma.systemControl.upsert({
+    where: { id: 1 },
+    update: {
+      transportUsdPerCbm,
+      customsRakovinaUsd,
+      customsUnitazUsd,
+      customsSifonUsd,
+      customsSmesitelUsd,
+      customsOynaUsd,
+    },
+    create: {
+      id: 1,
+      lastBackupAt: new Date(),
+      inventoryCheckedAt: null,
+      warehouseDiscrepancyCount: 0,
+      plannedMonthlyExpensesUSD: 0,
+      serverTimeOffsetMinutes: 0,
+      serverTimeAuto: true,
+      serverTimeZone: "UTC",
+      manualSystemTime: null,
+      costingRuleMode: "CATEGORY_BASED_V2",
+      transportUsdPerCbm,
+      customsRakovinaUsd,
+      customsUnitazUsd,
+      customsSifonUsd,
+      customsSmesitelUsd,
+      customsOynaUsd,
+    },
+  });
+
+  const containers = await prisma.container.findMany({ select: { id: true } });
+  for (const container of containers) {
+    await recalculateContainerUnitCost(container.id);
+    await recalculateContainerFinancials(container.id);
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/containers");
+  revalidatePath("/containers/excel");
+  revalidatePath("/products/excel");
+  revalidatePath("/dashboard");
+  revalidatePath("/stock");
+  revalidatePath("/sales");
+}
+
 export async function updateCostingRuleModeAction(formData: FormData) {
   const session = await getRequiredSession();
   if (session.role !== Role.SUPER_ADMIN) {
@@ -332,6 +390,12 @@ export async function updateCostingRuleModeAction(formData: FormData) {
       serverTimeZone: "UTC",
       manualSystemTime: null,
       costingRuleMode,
+      transportUsdPerCbm: 85.714653,
+      customsRakovinaUsd: 6.65,
+      customsUnitazUsd: 18.81,
+      customsSifonUsd: 0.82,
+      customsSmesitelUsd: 1.47,
+      customsOynaUsd: 0,
     },
   });
 

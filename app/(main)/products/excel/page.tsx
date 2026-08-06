@@ -16,7 +16,7 @@ export default async function ProductsExcelPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, description: true },
     }),
-    prisma.systemControl.findUnique({ where: { id: 1 }, select: { costingRuleMode: true } }),
+    prisma.systemControl.findUnique({ where: { id: 1 }, select: { costingRuleMode: true, transportUsdPerCbm: true, customsRakovinaUsd: true, customsUnitazUsd: true, customsSifonUsd: true, customsSmesitelUsd: true, customsOynaUsd: true } }),
   ]);
 
   return (
@@ -39,7 +39,8 @@ export default async function ProductsExcelPage() {
       </article>
 
       <div className="min-h-0">
-        <CreateProductsExcelPage categories={categories} costingRuleMode={control?.costingRuleMode ?? "LEGACY"} />
+        <CreateProductsExcelPage categories={categories} costingRuleMode={control?.costingRuleMode ?? "LEGACY"}
+          costingConfig={control ?? undefined} />
       </div>
     </section>
   );

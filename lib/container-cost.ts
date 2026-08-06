@@ -3,6 +3,7 @@ import {
   buildCustomsFallbackPerUnitMap,
   calculateV2Costing,
   COSTING_RULE_MODES,
+  getCostingConfigFromControl,
   resolveCostingRuleMode,
 } from "@/lib/costing-rules";
 
@@ -20,7 +21,7 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
     }),
     tx.systemControl.findUnique({
       where: { id: 1 },
-      select: { costingRuleMode: true },
+      select: { costingRuleMode: true, transportUsdPerCbm: true, customsRakovinaUsd: true, customsUnitazUsd: true, customsSifonUsd: true, customsSmesitelUsd: true, customsOynaUsd: true },
     }),
     tx.containerItem.findMany({
       where: { containerId },
@@ -54,6 +55,7 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
   }
 
   const costingRuleMode = resolveCostingRuleMode(control?.costingRuleMode);
+  const costingConfig = getCostingConfigFromControl(control);
 
   if (costingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
     const totalCustomsUsd = expenses
@@ -71,6 +73,7 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
         sku: item.product.sku,
       })),
       totalCustomsUsd,
+      costingConfig,
     });
 
     for (const item of items) {
@@ -84,6 +87,7 @@ export async function recalculateContainerUnitCost(containerId: string, tx: TxCl
         sku: item.product.sku,
         manualCustomsPerUnitUsd: item.manualCustomsPerUnitUSD,
         fallbackCustomsPerUnitUsd: customsFallbackMap.get(item.id) ?? 0,
+        costingConfig,
       });
       await tx.containerItem.update({
         where: { id: item.id },

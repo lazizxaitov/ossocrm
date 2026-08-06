@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
-import { updateAutoLogoutTimerAction, updateCostingRuleModeAction } from "@/app/(main)/settings/actions";
+import { updateAutoLogoutTimerAction, updateCostingRatesAction, updateCostingRuleModeAction } from "@/app/(main)/settings/actions";
 import { BackupCard } from "@/app/(main)/settings/backup-card";
 import { ResetBusinessDataCard } from "@/app/(main)/settings/reset-business-data-card";
 import { ServerTimeCard } from "@/app/(main)/settings/server-time-card";
 import { UserAccessSection } from "@/app/(main)/settings/user-access-section";
 import { getRequiredSession } from "@/lib/auth";
 import { listBackups } from "@/lib/backup";
-import { COSTING_RULE_MODES, TRANSPORT_USD_PER_CBM, getCustomsRateUsdPerUnit, resolveCostingRuleMode } from "@/lib/costing-rules";
+import { COSTING_RULE_MODES, getCostingConfigFromControl, getCustomsRateUsdPerUnit, resolveCostingRuleMode } from "@/lib/costing-rules";
 import { prisma } from "@/lib/prisma";
 import { SETTINGS_ROLES } from "@/lib/rbac";
 
@@ -40,6 +40,7 @@ export default async function SettingsPage() {
   const canRestoreBackup = isSuperAdmin;
   const autoLogoutMinutes = Math.max(1, control?.serverTimeOffsetMinutes ?? 10);
   const costingRuleMode = resolveCostingRuleMode(control?.costingRuleMode);
+  const costingConfig = getCostingConfigFromControl(control);
 
   const serverNow = new Date();
   const timeZone = control?.serverTimeZone ?? "UTC";
@@ -117,11 +118,12 @@ export default async function SettingsPage() {
               </label>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <div>1 m³ transport: <span className="font-medium">{TRANSPORT_USD_PER_CBM.toFixed(6)} USD</span></div>
-              <div>Rakovina: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "rakovina" }).toFixed(2)} USD/шт</span></div>
-              <div>Unitaz: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "unitaz" }).toFixed(2)} USD/шт</span></div>
-              <div>Sifon: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "sifon" }).toFixed(2)} USD/шт</span></div>
-              <div>Smesitel: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "smesitel" }).toFixed(2)} USD/шт</span></div>
+              <div>1 m³ transport: <span className="font-medium">{costingConfig.transportUsdPerCbm.toFixed(6)} USD</span></div>
+              <div>Rakovina: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "rakovina" }, costingConfig).toFixed(2)} USD/шт</span></div>
+              <div>Unitaz: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "unitaz" }, costingConfig).toFixed(2)} USD/шт</span></div>
+              <div>Sifon: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "sifon" }, costingConfig).toFixed(2)} USD/шт</span></div>
+              <div>Smesitel: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "smesitel" }, costingConfig).toFixed(2)} USD/шт</span></div>
+              <div>Oyna: <span className="font-medium">{getCustomsRateUsdPerUnit({ categoryName: "oyna" }, costingConfig).toFixed(2)} USD/шт</span></div>
             </div>
             <div>
               <button
@@ -129,6 +131,40 @@ export default async function SettingsPage() {
                 className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
               >
                 Сохранить правило учета
+              </button>
+            </div>
+          </form>
+          <form action={updateCostingRatesAction} className="mt-5 grid gap-3 rounded-xl border border-[var(--border)] p-4">
+            <div className="text-sm font-medium text-slate-900">Ставки для Excel-окон</div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <label className="grid gap-1 text-sm text-slate-700">
+                <span>Transport 1 m³ (USD)</span>
+                <input name="transportUsdPerCbm" type="number" min={0} step="0.000001" defaultValue={costingConfig.transportUsdPerCbm} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm" />
+              </label>
+              <label className="grid gap-1 text-sm text-slate-700">
+                <span>Rakovinaga (USD/шт)</span>
+                <input name="customsRakovinaUsd" type="number" min={0} step="0.01" defaultValue={costingConfig.customsRakovinaUsd} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm" />
+              </label>
+              <label className="grid gap-1 text-sm text-slate-700">
+                <span>Unitazga (USD/шт)</span>
+                <input name="customsUnitazUsd" type="number" min={0} step="0.01" defaultValue={costingConfig.customsUnitazUsd} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm" />
+              </label>
+              <label className="grid gap-1 text-sm text-slate-700">
+                <span>Sifonga (USD/шт)</span>
+                <input name="customsSifonUsd" type="number" min={0} step="0.01" defaultValue={costingConfig.customsSifonUsd} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm" />
+              </label>
+              <label className="grid gap-1 text-sm text-slate-700">
+                <span>Smesitelga (USD/шт)</span>
+                <input name="customsSmesitelUsd" type="number" min={0} step="0.01" defaultValue={costingConfig.customsSmesitelUsd} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm" />
+              </label>
+              <label className="grid gap-1 text-sm text-slate-700">
+                <span>Oynaga (USD/шт)</span>
+                <input name="customsOynaUsd" type="number" min={0} step="0.01" defaultValue={costingConfig.customsOynaUsd} className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm" />
+              </label>
+            </div>
+            <div>
+              <button type="submit" className="rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Сохранить ставки Excel
               </button>
             </div>
           </form>
