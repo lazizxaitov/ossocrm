@@ -318,15 +318,41 @@ export function CreateContainerExcelPage({
   const [excelBusy, setExcelBusy] = useState(false);
   const [excelMessage, setExcelMessage] = useState<string | null>(null);
   const excelInputRef = useRef<HTMLInputElement | null>(null);
-
+  const initialCostingConfig = useMemo(() => getCostingConfigFromControl(costingConfig), [costingConfig]);
+  const [transportUsdPerCbm, setTransportUsdPerCbm] = useState(String(initialCostingConfig.transportUsdPerCbm));
+  const [customsRakovinaUsd, setCustomsRakovinaUsd] = useState(String(initialCostingConfig.customsRakovinaUsd));
+  const [customsUnitazUsd, setCustomsUnitazUsd] = useState(String(initialCostingConfig.customsUnitazUsd));
+  const [customsSifonUsd, setCustomsSifonUsd] = useState(String(initialCostingConfig.customsSifonUsd));
+  const [customsSmesitelUsd, setCustomsSmesitelUsd] = useState(String(initialCostingConfig.customsSmesitelUsd));
+  const [customsOynaUsd, setCustomsOynaUsd] = useState(String(initialCostingConfig.customsOynaUsd));
 
   const [nextInvestmentKey, setNextInvestmentKey] = useState(2);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
+  const [investorModalOpen, setInvestorModalOpen] = useState(false);
 
   const [nextExpenseKey, setNextExpenseKey] = useState(2);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const activeCostingRuleMode = resolveCostingRuleMode(costingRuleMode);
-  const resolvedCostingConfig = useMemo(() => getCostingConfigFromControl(costingConfig), [costingConfig]);
+  const liveCostingConfig = useMemo(
+    () => ({
+      transportUsdPerCbm: toNumber(transportUsdPerCbm) > 0 ? toNumber(transportUsdPerCbm) : initialCostingConfig.transportUsdPerCbm,
+      customsRakovinaUsd: Math.max(0, toNumber(customsRakovinaUsd)),
+      customsUnitazUsd: Math.max(0, toNumber(customsUnitazUsd)),
+      customsSifonUsd: Math.max(0, toNumber(customsSifonUsd)),
+      customsSmesitelUsd: Math.max(0, toNumber(customsSmesitelUsd)),
+      customsOynaUsd: Math.max(0, toNumber(customsOynaUsd)),
+    }),
+    [
+      customsOynaUsd,
+      customsRakovinaUsd,
+      customsSifonUsd,
+      customsSmesitelUsd,
+      customsUnitazUsd,
+      initialCostingConfig.transportUsdPerCbm,
+      transportUsdPerCbm,
+    ],
+  );
 
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const productBySku = useMemo(() => new Map(products.map((p) => [p.sku.trim().toLowerCase(), p])), [products]);
@@ -480,7 +506,7 @@ export function CreateContainerExcelPage({
         }),
         totalCustomsUsd: expenseTotals.customs,
       }),
-    [rows, productMap, expenseTotals.customs, resolvedCostingConfig],
+    [rows, productMap, expenseTotals.customs, liveCostingConfig],
   );
 
   const v2Totals = useMemo(() => {
@@ -496,7 +522,7 @@ export function CreateContainerExcelPage({
           totalProductUsd: productTotals.totalUsd,
           manualCustomsPerUnitUsd: toNumber(row.manualCustomsPerUnitUSD),
           fallbackCustomsPerUnitUsd: customsFallbackMap.get(row.key) ?? 0,
-          costingConfig: resolvedCostingConfig,
+          costingConfig: liveCostingConfig,
         });
         acc.transport += metrics.totalTransportUsd;
         acc.customs += metrics.totalCustomsUsd;
@@ -505,7 +531,7 @@ export function CreateContainerExcelPage({
       },
       { transport: 0, customs: 0, grandTotal: 0 },
     );
-  }, [rows, productMap, activeCostingRuleMode, expenseTotals.road, expenseTotals.customs, productTotals.totalUsd, customsFallbackMap, resolvedCostingConfig]);
+  }, [rows, productMap, activeCostingRuleMode, expenseTotals.road, expenseTotals.customs, productTotals.totalUsd, customsFallbackMap, liveCostingConfig]);
 
   const summaryBlock = useMemo(() => {
     if (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2) {
@@ -1017,7 +1043,7 @@ export function CreateContainerExcelPage({
           totalProductUsd: productTotals.totalUsd,
           manualCustomsPerUnitUsd: toNumber(row.manualCustomsPerUnitUSD),
           fallbackCustomsPerUnitUsd: customsFallbackMap.get(row.key) ?? 0,
-          costingConfig: resolvedCostingConfig,
+          costingConfig: liveCostingConfig,
         });
         sheet.addRow([
           row.factoryName,
@@ -1119,12 +1145,12 @@ export function CreateContainerExcelPage({
       sheet.getCell("V3").value = "SIFONGA";
       sheet.getCell("W3").value = "SEMESITELGA";
       sheet.getCell("X3").value = "OYNAGA";
-      sheet.getCell("T4").value = resolvedCostingConfig.customsRakovinaUsd;
-      sheet.getCell("U4").value = resolvedCostingConfig.customsUnitazUsd;
-      sheet.getCell("V4").value = resolvedCostingConfig.customsSifonUsd;
-      sheet.getCell("W4").value = resolvedCostingConfig.customsSmesitelUsd;
-      sheet.getCell("X4").value = resolvedCostingConfig.customsOynaUsd;
-      sheet.getCell("T5").value = resolvedCostingConfig.transportUsdPerCbm;
+      sheet.getCell("T4").value = liveCostingConfig.customsRakovinaUsd;
+      sheet.getCell("U4").value = liveCostingConfig.customsUnitazUsd;
+      sheet.getCell("V4").value = liveCostingConfig.customsSifonUsd;
+      sheet.getCell("W4").value = liveCostingConfig.customsSmesitelUsd;
+      sheet.getCell("X4").value = liveCostingConfig.customsOynaUsd;
+      sheet.getCell("T5").value = liveCostingConfig.transportUsdPerCbm;
       sheet.getCell("I5").value = "TOTAL AMOUNT";
       sheet.getCell("J5").value = "TOTAL CBM";
       sheet.getCell("K5").value = "TOTAL N.W. KGS";
@@ -1799,7 +1825,7 @@ export function CreateContainerExcelPage({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:flex xl:flex-wrap xl:justify-end">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[repeat(7,minmax(0,auto))] xl:justify-end">
           <input
             ref={excelInputRef}
             type="file"
@@ -1852,6 +1878,20 @@ export function CreateContainerExcelPage({
           >
             Пустая строка
           </button>
+          <button
+            type="button"
+            onClick={() => setInvestorModalOpen(true)}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Инвесторы ({investmentRows.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpenseModalOpen(true)}
+            className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Расходы ({expenseRows.length})
+          </button>
         </div>
 
         {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
@@ -1860,16 +1900,86 @@ export function CreateContainerExcelPage({
         </form>
       </article>
 
-      <div className="grid min-h-0 grid-rows-[auto_1fr_auto_auto] gap-4">
-        <article className="rounded-2xl border border-[var(--border)] bg-white p-4">
-          <div className="grid gap-3 lg:grid-cols-5">
-            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Rakovinaga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsRakovinaUsd.toFixed(2)} USD</div></div>
-            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Unitazga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsUnitazUsd.toFixed(2)} USD</div></div>
-            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sifonga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsSifonUsd.toFixed(2)} USD</div></div>
-            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Smesitelga</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.customsSmesitelUsd.toFixed(2)} USD</div></div>
-            <div className="rounded-xl border border-slate-200 px-4 py-3 text-center"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">1 m³ transport</div><div className="mt-2 text-lg font-semibold text-slate-900">{resolvedCostingConfig.transportUsdPerCbm.toFixed(6)} USD</div></div>
+      <div className="grid min-h-0 grid-rows-[auto_1fr_auto] gap-4">
+        <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-center">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Rakovinaga</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Unitazga</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Sifonga</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Smesitelga</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Oynaga</th>
+                  <th className="border-b border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">1 m3 transport</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border-r border-slate-300 px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={customsRakovinaUsd}
+                      onChange={(e) => setCustomsRakovinaUsd(e.target.value)}
+                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                    />
+                  </td>
+                  <td className="border-r border-slate-300 px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={customsUnitazUsd}
+                      onChange={(e) => setCustomsUnitazUsd(e.target.value)}
+                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                    />
+                  </td>
+                  <td className="border-r border-slate-300 px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={customsSifonUsd}
+                      onChange={(e) => setCustomsSifonUsd(e.target.value)}
+                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                    />
+                  </td>
+                  <td className="border-r border-slate-300 px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={customsSmesitelUsd}
+                      onChange={(e) => setCustomsSmesitelUsd(e.target.value)}
+                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                    />
+                  </td>
+                  <td className="border-r border-slate-300 px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={customsOynaUsd}
+                      onChange={(e) => setCustomsOynaUsd(e.target.value)}
+                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.000001"
+                      value={transportUsdPerCbm}
+                      onChange={(e) => setTransportUsdPerCbm(e.target.value)}
+                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <p className="mt-3 text-xs text-slate-500">Ставки меняются в разделе настроек и используются в формулах Excel как в файле AZIZGA.xlsx.</p>
         </article>
         <article className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
           <div className="border-b border-[var(--border)] bg-white px-4 py-3">
@@ -1928,7 +2038,7 @@ export function CreateContainerExcelPage({
                     totalProductUsd: productTotals.totalUsd,
                     manualCustomsPerUnitUsd: toNumber(r.manualCustomsPerUnitUSD),
                     fallbackCustomsPerUnitUsd: customsFallbackMap.get(r.key) ?? 0,
-                    costingConfig: resolvedCostingConfig,
+                    costingConfig: liveCostingConfig,
                   });
                   const resolvedCustomsPerUnitValue =
                     metrics.totalCustomsUsd > 0 && metrics.quantity > 0 ? metrics.totalCustomsUsd / metrics.quantity : 0;
@@ -2092,42 +2202,80 @@ export function CreateContainerExcelPage({
             </table>
           </div>
         </article>
+      </div>
 
-        <article className="flex max-h-[240px] min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Инвесторы</h2>
-            <button
-              type="button"
-              onClick={addInvestmentRow}
-              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Добавить строку
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[720px] border-separate border-spacing-0 border border-[var(--border)] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-[var(--surface-soft)] text-slate-700">
-                <tr>
-                  {investmentColumns.map((c) => (
-                    <th key={c.label} className={`border-b border-r border-[var(--border)] px-2 py-2 font-semibold ${c.width}`}>
-                      {c.label}
-                    </th>
-                  ))}
-                  <th className="min-w-[110px] border-b border-[var(--border)] px-2 py-2 font-semibold">—</th>
-                </tr>
-              </thead>
-              <tbody>
-                {investmentRows.map((r, rowIndex) => (
-                  <tr key={r.key}>
-                    {investmentColumns.map((c, colIndex) => {
-                      const field = c.id;
-                      if (field === "investorName") {
+      <datalist id="investor-names">
+        {investors.map((inv) => (
+          <option key={inv.id} value={inv.name} />
+        ))}
+      </datalist>
+
+      {investorModalOpen ? (
+        <div className="fixed inset-0 z-[55] grid place-items-center bg-slate-900/40 p-4" onClick={() => setInvestorModalOpen(false)}>
+          <div className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Инвесторы</h2>
+                <p className="text-sm text-slate-500">Вложения по контейнеру.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={addInvestmentRow}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Добавить инвестора
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvestorModalOpen(false)}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              <table className="w-full min-w-[720px] border-separate border-spacing-0 border border-[var(--border)] text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-soft)] text-slate-700">
+                  <tr>
+                    {investmentColumns.map((c) => (
+                      <th key={c.label} className={`border-b border-r border-[var(--border)] px-2 py-2 font-semibold ${c.width}`}>
+                        {c.label}
+                      </th>
+                    ))}
+                    <th className="min-w-[110px] border-b border-[var(--border)] px-2 py-2 font-semibold">—</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {investmentRows.map((r, rowIndex) => (
+                    <tr key={r.key}>
+                      {investmentColumns.map((c, colIndex) => {
+                        const field = c.id;
+                        if (field === "investorName") {
+                          return (
+                            <td key={field} className="border-b border-r border-[var(--border)] px-0">
+                              <input
+                                list="investor-names"
+                                value={r.investorName}
+                                onChange={(e) => updateInvestmentRow(r.key, { investorName: e.target.value })}
+                                onPaste={(e) => {
+                                  const text = e.clipboardData.getData("text");
+                                  if (!text.includes("\t") && !text.includes("\n")) return;
+                                  e.preventDefault();
+                                  applyPasteToInvestors(rowIndex, colIndex, text);
+                                }}
+                                className="w-full bg-white px-2.5 py-1.5 text-sm outline-none focus:bg-[#fffceb]"
+                                placeholder="Имя инвестора"
+                              />
+                            </td>
+                          );
+                        }
                         return (
                           <td key={field} className="border-b border-r border-[var(--border)] px-0">
                             <input
-                              list="investor-names"
-                              value={r.investorName}
-                              onChange={(e) => updateInvestmentRow(r.key, { investorName: e.target.value })}
+                              value={String(r[field] ?? "")}
+                              onChange={(e) => updateInvestmentRow(r.key, { [field]: e.target.value } as Partial<InvestmentRow>)}
                               onPaste={(e) => {
                                 const text = e.clipboardData.getData("text");
                                 if (!text.includes("\t") && !text.includes("\n")) return;
@@ -2135,91 +2283,105 @@ export function CreateContainerExcelPage({
                                 applyPasteToInvestors(rowIndex, colIndex, text);
                               }}
                               className="w-full bg-white px-2.5 py-1.5 text-sm outline-none focus:bg-[#fffceb]"
-                              placeholder="Имя инвестора"
                             />
                           </td>
                         );
-                      }
-                      return (
-                        <td key={field} className="border-b border-r border-[var(--border)] px-0">
-                          <input
-                            value={String(r[field] ?? "")}
-                            onChange={(e) =>
-                              updateInvestmentRow(r.key, { [field]: e.target.value } as Partial<InvestmentRow>)
-                            }
-                            onPaste={(e) => {
-                              const text = e.clipboardData.getData("text");
-                              if (!text.includes("\t") && !text.includes("\n")) return;
-                              e.preventDefault();
-                              applyPasteToInvestors(rowIndex, colIndex, text);
-                            }}
-                            className="w-full bg-white px-2.5 py-1.5 text-sm outline-none focus:bg-[#fffceb]"
-                          />
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-[var(--border)] px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => removeInvestmentRow(r.key)}
-                        className="rounded border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        Удалить
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!investmentRows.length ? (
-                  <tr>
-                    <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={investmentColumns.length + 1}>
-                      Нет строк. Нажмите «Добавить строку» или вставьте из Excel.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-            <datalist id="investor-names">
-              {investors.map((inv) => (
-                <option key={inv.id} value={inv.name} />
-              ))}
-            </datalist>
-          </div>
-        </article>
-
-        <article className="flex max-h-[260px] min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Расходы</h2>
-            <button
-              type="button"
-              onClick={addExpenseRow}
-              className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Добавить строку
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[900px] border-separate border-spacing-0 border border-[var(--border)] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-[var(--surface-soft)] text-slate-700">
-                <tr>
-                  {expenseColumns.map((c) => (
-                    <th key={c.label} className={`border-b border-r border-[var(--border)] px-2 py-2 font-semibold ${c.width}`}>
-                      {c.label}
-                    </th>
+                      })}
+                      <td className="border-b border-[var(--border)] px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => removeInvestmentRow(r.key)}
+                          className="rounded border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          Удалить
+                        </button>
+                      </td>
+                    </tr>
                   ))}
-                  <th className="min-w-[110px] border-b border-[var(--border)] px-2 py-2 font-semibold">—</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expenseRows.map((r, rowIndex) => (
-                  <tr key={r.key}>
-                    {expenseColumns.map((c, colIndex) => {
-                      const field = c.id;
-                      if (field === "category") {
+                  {!investmentRows.length ? (
+                    <tr>
+                      <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={investmentColumns.length + 1}>
+                        Нет строк. Нажмите «Добавить инвестора» или вставьте из Excel.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {expenseModalOpen ? (
+        <div className="fixed inset-0 z-[55] grid place-items-center bg-slate-900/40 p-4" onClick={() => setExpenseModalOpen(false)}>
+          <div className="flex max-h-[85vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Расходы</h2>
+                <p className="text-sm text-slate-500">Логистика, растаможка и прочие расходы контейнера.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={addExpenseRow}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Добавить расход
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpenseModalOpen(false)}
+                  className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              <table className="w-full min-w-[900px] border-separate border-spacing-0 border border-[var(--border)] text-left text-sm">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-soft)] text-slate-700">
+                  <tr>
+                    {expenseColumns.map((c) => (
+                      <th key={c.label} className={`border-b border-r border-[var(--border)] px-2 py-2 font-semibold ${c.width}`}>
+                        {c.label}
+                      </th>
+                    ))}
+                    <th className="min-w-[110px] border-b border-[var(--border)] px-2 py-2 font-semibold">—</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenseRows.map((r, rowIndex) => (
+                    <tr key={r.key}>
+                      {expenseColumns.map((c, colIndex) => {
+                        const field = c.id;
+                        if (field === "category") {
+                          return (
+                            <td key={field} className="border-b border-r border-[var(--border)] px-0">
+                              <select
+                                value={r.category}
+                                onChange={(e) => updateExpenseRow(r.key, { category: e.target.value as ExpenseRow["category"] })}
+                                onPaste={(e) => {
+                                  const text = e.clipboardData.getData("text");
+                                  if (!text.includes("\t") && !text.includes("\n")) return;
+                                  e.preventDefault();
+                                  applyPasteToExpenses(rowIndex, colIndex, text);
+                                }}
+                                className="w-full bg-white px-2.5 py-1.5 text-sm outline-none focus:bg-[#fffceb]"
+                              >
+                                <option value="LOGISTICS">LOGISTICS</option>
+                                <option value="CUSTOMS">CUSTOMS</option>
+                                <option value="STORAGE">STORAGE</option>
+                                <option value="TRANSPORT">TRANSPORT</option>
+                                <option value="OTHER">OTHER</option>
+                              </select>
+                            </td>
+                          );
+                        }
                         return (
                           <td key={field} className="border-b border-r border-[var(--border)] px-0">
-                            <select
-                              value={r.category}
-                              onChange={(e) => updateExpenseRow(r.key, { category: e.target.value as ExpenseRow["category"] })}
+                            <input
+                              value={String(r[field] ?? "")}
+                              onChange={(e) => updateExpenseRow(r.key, { [field]: e.target.value } as Partial<ExpenseRow>)}
                               onPaste={(e) => {
                                 const text = e.clipboardData.getData("text");
                                 if (!text.includes("\t") && !text.includes("\n")) return;
@@ -2227,55 +2389,34 @@ export function CreateContainerExcelPage({
                                 applyPasteToExpenses(rowIndex, colIndex, text);
                               }}
                               className="w-full bg-white px-2.5 py-1.5 text-sm outline-none focus:bg-[#fffceb]"
-                            >
-                              <option value="LOGISTICS">LOGISTICS</option>
-                              <option value="CUSTOMS">CUSTOMS</option>
-                              <option value="STORAGE">STORAGE</option>
-                              <option value="TRANSPORT">TRANSPORT</option>
-                              <option value="OTHER">OTHER</option>
-                            </select>
+                            />
                           </td>
                         );
-                      }
-                      return (
-                        <td key={field} className="border-b border-r border-[var(--border)] px-0">
-                          <input
-                            value={String(r[field] ?? "")}
-                            onChange={(e) => updateExpenseRow(r.key, { [field]: e.target.value } as Partial<ExpenseRow>)}
-                            onPaste={(e) => {
-                              const text = e.clipboardData.getData("text");
-                              if (!text.includes("\t") && !text.includes("\n")) return;
-                              e.preventDefault();
-                              applyPasteToExpenses(rowIndex, colIndex, text);
-                            }}
-                            className="w-full bg-white px-2.5 py-1.5 text-sm outline-none focus:bg-[#fffceb]"
-                          />
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-[var(--border)] px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => removeExpenseRow(r.key)}
-                        className="rounded border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                      >
-                        Удалить
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!expenseRows.length ? (
-                  <tr>
-                    <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={expenseColumns.length + 1}>
-                      Нет строк. Нажмите «Добавить строку» или вставьте из Excel.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+                      })}
+                      <td className="border-b border-[var(--border)] px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => removeExpenseRow(r.key)}
+                          className="rounded border border-[var(--border)] px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          Удалить
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!expenseRows.length ? (
+                    <tr>
+                      <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={expenseColumns.length + 1}>
+                        Нет строк. Нажмите «Добавить расход» или вставьте из Excel.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </article>
-      </div>
+        </div>
+      ) : null}
 
       {pickerOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setPickerOpen(false)}>
