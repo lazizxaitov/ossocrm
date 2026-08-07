@@ -113,6 +113,59 @@ function calcLineTotalUsd(row: Pick<GridRow, "quantity" | "priceCNY" | "totalAmo
   return "";
 }
 
+function parseCbmFromText(...texts: Array<string | null | undefined>) {
+  for (const raw of texts) {
+    const text = String(raw ?? "").trim();
+    if (!text) continue;
+    const normalized = text.replace(/[xXхХ×]/g, "*").replace(/\s+/g, "");
+    const match = normalized.match(/(\d+(?:[.,]\d+)?)\*(\d+(?:[.,]\d+)?)\*(\d+(?:[.,]\d+)?)/);
+    if (!match) continue;
+
+    const a = Number(match[1]!.replace(",", "."));
+    const b = Number(match[2]!.replace(",", "."));
+    const c = Number(match[3]!.replace(",", "."));
+    if (!(a > 0) || !(b > 0) || !(c > 0)) continue;
+
+    const max = Math.max(a, b, c);
+    let cbm = 0;
+
+    if (max > 100) {
+      cbm = (a * b * c) / 1_000_000_000;
+    } else if (max > 10) {
+      cbm = (a * b * c) / 1_000_000;
+    } else {
+      cbm = a * b * c;
+    }
+
+    if (cbm > 0) return Number(cbm.toFixed(6));
+  }
+  return 0;
+}
+
+function normalizeCbmInput({
+  currentCbm,
+  factoryName,
+  localName,
+  saize,
+  product,
+}: {
+  currentCbm: string | number | null | undefined;
+  factoryName?: string | null;
+  localName?: string | null;
+  saize?: string | null;
+  product?: ProductOption | null;
+}) {
+  const current = typeof currentCbm === "number" ? currentCbm : toNumber(String(currentCbm ?? ""));
+  if (current > 0 && current <= 5) return String(Number(current.toFixed(6)));
+
+  const parsed = parseCbmFromText(factoryName, saize, localName, product?.sku, product?.name, product?.size);
+  if (parsed > 0) return String(Number(parsed.toFixed(6)));
+
+  if (current > 0) return String(Number(current.toFixed(6)));
+  if (product?.cbm && product.cbm > 0) return String(Number(product.cbm.toFixed(6)));
+  return "";
+}
+
 function getWorksheetCellText(value: unknown) {
   if (value == null) return "";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).trim();
@@ -654,11 +707,32 @@ export function CreateContainerExcelPage({
             if (!next.priceCNY && hit.costPriceUSD > 0 && normalizeExchangeRateToUsd(next.exchangeRate) > 0) {
               next.priceCNY = String(Number(convertUsdToCny(hit.costPriceUSD, next.exchangeRate).toFixed(4)));
             }
-            if (!next.cbm && hit.cbm > 0) next.cbm = String(hit.cbm);
+            next.cbm = normalizeCbmInput({
+              currentCbm: next.cbm || hit.cbm,
+              factoryName: next.factoryName,
+              localName: next.localName,
+              saize: next.saize,
+              product: hit,
+            });
             if (!next.kg && hit.kg > 0) next.kg = String(hit.kg);
           } else {
             next.productId = "";
           }
+        }
+        if (
+          patch.factoryName !== undefined ||
+          patch.localName !== undefined ||
+          patch.saize !== undefined ||
+          patch.cbm !== undefined
+        ) {
+          const hit = next.productId ? (productMap.get(next.productId) ?? null) : null;
+          next.cbm = normalizeCbmInput({
+            currentCbm: next.cbm,
+            factoryName: next.factoryName,
+            localName: next.localName,
+            saize: next.saize,
+            product: hit,
+          });
         }
 
         if (patch.quantity !== undefined || patch.priceCNY !== undefined) {
@@ -825,7 +899,13 @@ export function CreateContainerExcelPage({
           if (!draft.localName) draft.localName = hit.name;
           if (!draft.factoryName) draft.factoryName = hit.sku;
           if (!draft.saize) draft.saize = hit.size || "";
-          if (!draft.cbm && hit.cbm > 0) draft.cbm = String(hit.cbm);
+          draft.cbm = normalizeCbmInput({
+            currentCbm: draft.cbm || hit.cbm,
+            factoryName: draft.factoryName,
+            localName: draft.localName,
+            saize: draft.saize,
+            product: hit,
+          });
           if (!draft.kg && hit.kg > 0) draft.kg = String(hit.kg);
         }
         draft.totalAmountCNY = draft.totalAmountCNY || calcTotalAmountCny(draft);
@@ -1332,6 +1412,13 @@ export function CreateContainerExcelPage({
     const rateValue = toNumber(rate);
     const priceCny = product.costPriceUSD > 0 && rateValue > 0 ? String(Number(convertUsdToCny(product.costPriceUSD, rateValue).toFixed(4))) : "";
     const safeQuantity = Math.max(1, Math.floor(quantity));
+    const normalizedCbm = normalizeCbmInput({
+      currentCbm: product.cbm,
+      factoryName: product.sku,
+      localName: product.name,
+      saize: product.size,
+      product,
+    });
     setRows((prev) => [
       ...prev,
       {
@@ -1344,7 +1431,7 @@ export function CreateContainerExcelPage({
         color: "",
         quantity: String(safeQuantity),
         totalAmountCNY: "",
-        cbm: product.cbm > 0 ? String(product.cbm) : "",
+        cbm: normalizedCbm,
         kg: product.kg > 0 ? String(product.kg) : "",
         totalCbm: "",
         nwKgs: "",
@@ -1552,11 +1639,32 @@ export function CreateContainerExcelPage({
             if (!merged.priceCNY && hit.costPriceUSD > 0 && normalizeExchangeRateToUsd(merged.exchangeRate) > 0) {
               merged.priceCNY = String(Number(convertUsdToCny(hit.costPriceUSD, merged.exchangeRate).toFixed(4)));
             }
-            if (!merged.cbm && hit.cbm > 0) merged.cbm = String(hit.cbm);
+            merged.cbm = normalizeCbmInput({
+              currentCbm: merged.cbm || hit.cbm,
+              factoryName: merged.factoryName,
+              localName: merged.localName,
+              saize: merged.saize,
+              product: hit,
+            });
             if (!merged.kg && hit.kg > 0) merged.kg = String(hit.kg);
           } else {
             merged.productId = "";
           }
+        }
+        if (
+          patch.factoryName !== undefined ||
+          patch.localName !== undefined ||
+          patch.saize !== undefined ||
+          patch.cbm !== undefined
+        ) {
+          const hit = merged.productId ? (productMap.get(merged.productId) ?? null) : null;
+          merged.cbm = normalizeCbmInput({
+            currentCbm: merged.cbm,
+            factoryName: merged.factoryName,
+            localName: merged.localName,
+            saize: merged.saize,
+            product: hit,
+          });
         }
         if (patch.quantity !== undefined || patch.priceCNY !== undefined) {
           if (!patch.totalAmountCNY) merged.totalAmountCNY = calcTotalAmountCny(merged);
