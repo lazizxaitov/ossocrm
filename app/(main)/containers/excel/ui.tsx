@@ -2076,7 +2076,7 @@ export function CreateContainerExcelPage({
         </form>
       </article>
 
-      <div className="grid min-h-0 grid-rows-[auto_1fr_auto] gap-4">
+      <div className="grid gap-4">
         <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-center">
@@ -2157,7 +2157,7 @@ export function CreateContainerExcelPage({
             </table>
           </div>
         </article>
-        <article className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+        <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
           <div className="border-b border-[var(--border)] bg-white px-4 py-3">
             <div>
               <h2 className="text-lg font-semibold tracking-[0.18em] text-slate-900">{name.trim() || getDefaultContainerName()}</h2>
@@ -2167,8 +2167,8 @@ export function CreateContainerExcelPage({
           {excelMessage ? (
             <div className="border-b border-[var(--border)] bg-slate-50 px-4 py-2 text-sm text-slate-700">{excelMessage}</div>
           ) : null}
-          <div className="min-h-0 flex-1 overflow-auto bg-white">
-            <div className="min-w-[2800px]">
+          <div className="overflow-x-auto bg-white">
+            <div className="min-w-[3200px]">
               <table className="w-full border-separate border-spacing-0 border border-slate-400 text-left text-sm">
               <thead className="sticky top-0 z-10 bg-white text-slate-800">
                 <tr>
@@ -2347,6 +2347,153 @@ export function CreateContainerExcelPage({
               </tbody>
               </table>
 
+              <div className="mt-5 border border-slate-300 bg-slate-50/60">
+                <div className="border-b border-[var(--border)] bg-slate-50/60 px-4 py-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-800">Добавленные товары</h3>
+                  <p className="text-xs text-slate-500">Нижний список по порядку основной Excel-таблицы.</p>
+                </div>
+              <table className="w-full border-separate border-spacing-0 border border-slate-300 bg-white text-left text-sm">
+                <thead className="bg-slate-100 text-slate-800">
+                  <tr>
+                    {columns.map((c) => (
+                      <th
+                        key={`summary-${c.id}`}
+                        className={`border-b border-r border-slate-300 px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-[0.08em] ${c.width}`}
+                      >
+                        {c.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const product = r.productId ? productMap.get(r.productId) ?? null : null;
+                    const metrics = computeRowMetrics({
+                      row: r,
+                      product,
+                      costingRuleMode: activeCostingRuleMode,
+                      totalRoadExpenses: activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? explicitExcelTotals.transport : expenseTotals.road,
+                      totalCustomsExpenses: activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? explicitExcelTotals.customs : expenseTotals.customs,
+                      totalProductUsd: productTotals.totalUsd,
+                      totalProductLines: productLineCount,
+                      manualCustomsPerUnitUsd: toNumber(r.manualCustomsPerUnitUSD) || getCustomsTypeRate(r.customsType, liveCostingConfig),
+                      fallbackCustomsPerUnitUsd: customsFallbackMap.get(r.key) ?? 0,
+                      costingConfig: liveCostingConfig,
+                    });
+
+                    return (
+                      <tr key={`summary-row-${r.key}`}>
+                        {columns.map((c) => {
+                          if (c.id === "picture") {
+                            return (
+                              <td key={`summary-${r.key}-picture`} className="border-b border-r border-slate-200 px-2 py-2">
+                                {product?.imagePath ? (
+                                  <Image
+                                    src={product.imagePath}
+                                    alt={product.name}
+                                    width={56}
+                                    height={56}
+                                    className="h-14 w-14 rounded-sm object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-14 w-14 rounded-sm border border-dashed border-slate-300 bg-white" />
+                                )}
+                              </td>
+                            );
+                          }
+
+                          let value = "";
+                          switch (c.id) {
+                            case "factoryName":
+                            case "localName":
+                            case "priceCNY":
+                            case "saize":
+                            case "color":
+                            case "quantity":
+                            case "totalAmountCNY":
+                            case "cbm":
+                            case "kg":
+                            case "totalCbm":
+                            case "nwKgs":
+                            case "exchangeRate":
+                            case "totalAmountUSD":
+                            case "manualCustomsPerUnitUSD":
+                              value = String(r[c.id] ?? "").trim();
+                              break;
+                            case "unitUsd":
+                              value = metrics.unitUsdValue > 0 ? metrics.unitUsdValue.toFixed(2) : "";
+                              break;
+                            case "averagePercent":
+                              value = metrics.averagePercentValue > 0 ? `${metrics.averagePercentValue.toFixed(2)}%` : "";
+                              break;
+                            case "logisticsAverage":
+                              value = metrics.logisticsAverageValue > 0 ? metrics.logisticsAverageValue.toFixed(2) : "";
+                              break;
+                            case "perUnitTotal":
+                              value = metrics.perUnitTotalValue > 0 ? metrics.perUnitTotalValue.toFixed(2) : "";
+                              break;
+                            case "grandTotal":
+                              value = metrics.grandTotalValue > 0 ? metrics.grandTotalValue.toFixed(2) : "";
+                              break;
+                            case "transportPerUnit":
+                              value = metrics.transportPerUnitValue > 0 ? metrics.transportPerUnitValue.toFixed(2) : "";
+                              break;
+                            case "transportTotal":
+                              value = metrics.totalTransportUsd > 0 ? metrics.totalTransportUsd.toFixed(2) : "";
+                              break;
+                            case "customsPerUnit":
+                              value = metrics.customsPerUnitValue > 0 ? metrics.customsPerUnitValue.toFixed(2) : "";
+                              break;
+                            case "customsTotal":
+                              value = metrics.totalCustomsUsd > 0 ? metrics.totalCustomsUsd.toFixed(2) : "";
+                              break;
+                            case "explicitFinalTotalAmount":
+                              value = metrics.explicitPerUnitTotalValue > 0 ? metrics.explicitPerUnitTotalValue.toFixed(2) : "";
+                              break;
+                            case "explicitFinalTotalAllContainers":
+                              value = metrics.explicitGrandTotalValue > 0 ? metrics.explicitGrandTotalValue.toFixed(2) : "";
+                              break;
+                            case "productTotal":
+                              value = metrics.productTotalValue > 0 ? metrics.productTotalValue.toFixed(2) : "";
+                              break;
+                            case "productTotalCny":
+                              value = metrics.productTotalCnyValue > 0 ? metrics.productTotalCnyValue.toFixed(2) : "";
+                              break;
+                            case "costPriceUSD":
+                              value = metrics.unitUsdValue > 0 ? metrics.unitUsdValue.toFixed(2) : "";
+                              break;
+                            case "salePriceUSD":
+                              value = metrics.salePriceUsdValue > 0 ? metrics.salePriceUsdValue.toFixed(2) : "";
+                              break;
+                            case "saleTotalUSD":
+                              value = metrics.saleTotalUsdValue > 0 ? metrics.saleTotalUsdValue.toFixed(2) : "";
+                              break;
+                            default:
+                              value = "";
+                          }
+
+                          return (
+                            <td
+                              key={`summary-${r.key}-${c.id}`}
+                              className="border-b border-r border-slate-200 px-3 py-3 text-[13px] text-slate-700"
+                            >
+                              {value || "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                  {!rows.length ? (
+                    <tr>
+                      <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={columns.length}>
+                        Пока нет добавленных товаров.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+              </div>
             </div>
           </div>
         </article>
