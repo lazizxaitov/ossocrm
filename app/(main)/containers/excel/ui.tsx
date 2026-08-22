@@ -230,6 +230,37 @@ function getWorksheetCellNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function isCnyColumn(
+  columnId:
+    | "priceCNY"
+    | "totalAmountCNY"
+    | "productTotalCny"
+    | "transportPerUnit"
+    | "transportTotal"
+    | "customsPerUnit"
+    | "customsTotal"
+    | "explicitFinalTotalAmount"
+    | "explicitFinalTotalAllContainers"
+    | "productTotal"
+    | "costPriceUSD"
+    | "salePriceUSD"
+    | "saleTotalUSD"
+    | "unitUsd"
+    | "averagePercent"
+    | "logisticsAverage"
+    | "perUnitTotal"
+    | "grandTotal"
+    | "totalAmountUSD",
+) {
+  return columnId === "priceCNY" || columnId === "totalAmountCNY" || columnId === "productTotalCny";
+}
+
+function formatExcelCurrencyValue(value: number, columnId: string) {
+  if (!(value > 0)) return "—";
+  if (columnId === "averagePercent") return `${value.toFixed(2)}%`;
+  return `${value.toFixed(2)} ${isCnyColumn(columnId as never) ? "¥" : "$"}`;
+}
+
 function classifyExpenseCategory(title: string): ExpenseRow["category"] {
   const normalized = normalizeHeader(title);
   if (
@@ -720,8 +751,8 @@ export function CreateContainerExcelPage({
   const summaryRow = useMemo(
     () => [
       { label: "SETS", value: productTotals.quantity > 0 ? String(productTotals.quantity) : "—" },
-      { label: "RMB", value: formatSheetValue(purchaseCnyValue, 2) },
-      { label: "USD", value: formatSheetValue(productTotals.totalUsd, 2) },
+      { label: "RMB", value: purchaseCnyValue > 0 ? `${formatSheetValue(purchaseCnyValue, 2)} ¥` : "—" },
+      { label: "USD", value: productTotals.totalUsd > 0 ? `${formatSheetValue(productTotals.totalUsd, 2)} $` : "—" },
       { label: "CBM", value: formatSheetValue(productTotals.totalCbm, 4) },
       { label: "TOTAL CBM", value: formatSheetValue(productTotals.totalCbm, 4) },
       { label: "KG", value: formatSheetValue(productTotals.totalKg, 3) },
@@ -729,23 +760,29 @@ export function CreateContainerExcelPage({
       { label: "KURS", value: rate || "—" },
       {
         label: "YO'L GA",
-        value: formatSheetValue(activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? v2Totals.transport : expenseTotals.road, 2),
+        value:
+          (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? v2Totals.transport : expenseTotals.road) > 0
+            ? `${formatSheetValue(activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? v2Totals.transport : expenseTotals.road, 2)} $`
+            : "—",
       },
       {
         label: "RASTAMOJKA",
-        value: formatSheetValue(activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? v2Totals.customs : expenseTotals.customs, 2),
+        value:
+          (activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? v2Totals.customs : expenseTotals.customs) > 0
+            ? `${formatSheetValue(activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? v2Totals.customs : expenseTotals.customs, 2)} $`
+            : "—",
       },
-      { label: "TOTAL AMOUNT", value: formatSheetValue(summaryBlock.grandTotalUsd, 2) },
-      { label: "СРЕДНЯЯ ЦЕНА ЗА 1 ШТ", value: formatSheetValue(summaryBlock.avgUnitUsd, 4) },
+      { label: "TOTAL AMOUNT", value: summaryBlock.grandTotalUsd > 0 ? `${formatSheetValue(summaryBlock.grandTotalUsd, 2)} $` : "—" },
+      { label: "СРЕДНЯЯ ЦЕНА ЗА 1 ШТ", value: summaryBlock.avgUnitUsd > 0 ? `${formatSheetValue(summaryBlock.avgUnitUsd, 4)} $` : "—" },
       {
         label: activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? "YO'L + RASTAMOJKA 1 SHT" : "СРЕДНИЕ ДОП. РАСХОДЫ 1 ШТ",
-        value: formatSheetValue(summaryBlock.avgExpensePerUnit, 4),
+        value: summaryBlock.avgExpensePerUnit > 0 ? `${formatSheetValue(summaryBlock.avgExpensePerUnit, 4)} $` : "—",
       },
-      { label: "BIR DONASI", value: formatSheetValue(summaryBlock.finalPerUnit, 4) },
-      { label: "TOLANGAN SUMMA", value: formatSheetValue(investedTotal, 2) },
-      { label: "Инвестиции", value: formatSheetValue(investedTotal, 2) },
-      { label: "Расходы", value: formatSheetValue(expenseTotals.all, 2) },
-      { label: "Остаток", value: summaryBlock.balance.toFixed(2) },
+      { label: "BIR DONASI", value: summaryBlock.finalPerUnit > 0 ? `${formatSheetValue(summaryBlock.finalPerUnit, 4)} $` : "—" },
+      { label: "TOLANGAN SUMMA", value: investedTotal > 0 ? `${formatSheetValue(investedTotal, 2)} $` : "—" },
+      { label: "Инвестиции", value: investedTotal > 0 ? `${formatSheetValue(investedTotal, 2)} $` : "—" },
+      { label: "Расходы", value: expenseTotals.all > 0 ? `${formatSheetValue(expenseTotals.all, 2)} $` : "—" },
+      { label: "Остаток", value: `${summaryBlock.balance.toFixed(2)} $` },
     ],
     [
       expenseTotals.all,
@@ -1879,18 +1916,18 @@ export function CreateContainerExcelPage({
     { id: "factoryName", label: "FACTORI NAME", width: "min-w-[250px]" },
     { id: "localName", label: "OSSO NAME", width: "min-w-[180px]" },
     { id: "picture", label: "PICTURE / 图片", width: "min-w-[140px]" },
-    { id: "priceCNY", label: "UNIT PRICE", width: "min-w-[170px]" },
+    { id: "priceCNY", label: "UNIT PRICE (¥)", width: "min-w-[170px]" },
     { id: "saize", label: "SAIZE", width: "min-w-[230px]" },
     { id: "color", label: "Product color", width: "min-w-[170px]" },
     { id: "quantity", label: "QUANTITY ( SET )", width: "min-w-[170px]" },
-    { id: "totalAmountCNY", label: "TOTAL AMOUNT", width: "min-w-[190px]" },
+    { id: "totalAmountCNY", label: "TOTAL AMOUNT (¥)", width: "min-w-[190px]" },
     { id: "cbm", label: "CBM", width: "min-w-[140px]" },
     { id: "kg", label: "KG", width: "min-w-[140px]" },
     { id: "totalCbm", label: "TOTAL CBM", width: "min-w-[170px]" },
     { id: "nwKgs", label: "TOTAL N.W. KGS", width: "min-w-[190px]" },
     { id: "exchangeRate", label: "КУРС", width: "min-w-[120px]" },
-    { id: "unitUsd", label: "Y - $", width: "min-w-[150px]" },
-    { id: "totalAmountUSD", label: "TOTAL AMOUNT", width: "min-w-[180px]" },
+    { id: "unitUsd", label: "Y - $ (USD)", width: "min-w-[150px]" },
+    { id: "totalAmountUSD", label: "TOTAL AMOUNT ($)", width: "min-w-[180px]" },
     {
       id: "averagePercent",
       label: getAverageColumnLabel(activeCostingRuleMode),
@@ -1898,23 +1935,23 @@ export function CreateContainerExcelPage({
     },
     {
       id: "logisticsAverage",
-      label: getLogisticsColumnLabel(activeCostingRuleMode),
+      label: `${getLogisticsColumnLabel(activeCostingRuleMode)} ($)`,
       width: "min-w-[210px]",
     },
-    { id: "perUnitTotal", label: "BIR DONASI", width: "min-w-[150px]" },
-    { id: "grandTotal", label: "JAMI", width: "min-w-[150px]" },
-    { id: "transportPerUnit", label: "TRANSPORTGA", width: "min-w-[160px]" },
-    { id: "transportTotal", label: "TOTAL AMOUNT TRANSPORTGA", width: "min-w-[210px]" },
-    { id: "customsPerUnit", label: "RASTAMOJKAGA", width: "min-w-[170px]" },
-    { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA", width: "min-w-[230px]" },
-    { id: "explicitFinalTotalAmount", label: "TOTAL AMOUNT", width: "min-w-[180px]" },
-    { id: "explicitFinalTotalAllContainers", label: "TOTAL AMOUNT ALL CONTEYNERS", width: "min-w-[260px]" },
-    { id: "manualCustomsPerUnitUSD", label: "RASTAMOJKA 1 SHT (РУЧН.)", width: "min-w-[220px]" },
-    { id: "productTotal", label: "ОБЩАЯ СУММА ТОВАРА", width: "min-w-[180px]" },
-    { id: "productTotalCny", label: "СУММА В ЮАНЯХ", width: "min-w-[170px]" },
-    { id: "costPriceUSD", label: "СЕБЕСТОИМОСТЬ", width: "min-w-[170px]" },
-    { id: "salePriceUSD", label: "ЦЕНА ПРОДАЖИ", width: "min-w-[170px]" },
-    { id: "saleTotalUSD", label: "ОБЩЕЕ ПО КОЛИЧЕСТВУ", width: "min-w-[190px]" },
+    { id: "perUnitTotal", label: "BIR DONASI ($)", width: "min-w-[150px]" },
+    { id: "grandTotal", label: "JAMI ($)", width: "min-w-[150px]" },
+    { id: "transportPerUnit", label: "TRANSPORTGA ($)", width: "min-w-[160px]" },
+    { id: "transportTotal", label: "TOTAL AMOUNT TRANSPORTGA ($)", width: "min-w-[210px]" },
+    { id: "customsPerUnit", label: "RASTAMOJKAGA ($)", width: "min-w-[170px]" },
+    { id: "customsTotal", label: "TOTAL AMOUNT RASTAMOJKAGA ($)", width: "min-w-[230px]" },
+    { id: "explicitFinalTotalAmount", label: "TOTAL AMOUNT ($)", width: "min-w-[180px]" },
+    { id: "explicitFinalTotalAllContainers", label: "TOTAL AMOUNT ALL CONTEYNERS ($)", width: "min-w-[260px]" },
+    { id: "manualCustomsPerUnitUSD", label: "RASTAMOJKA 1 SHT (РУЧН.) ($)", width: "min-w-[220px]" },
+    { id: "productTotal", label: "ОБЩАЯ СУММА ТОВАРА ($)", width: "min-w-[180px]" },
+    { id: "productTotalCny", label: "СУММА В ЮАНЯХ (¥)", width: "min-w-[170px]" },
+    { id: "costPriceUSD", label: "СЕБЕСТОИМОСТЬ ($)", width: "min-w-[170px]" },
+    { id: "salePriceUSD", label: "ЦЕНА ПРОДАЖИ ($)", width: "min-w-[170px]" },
+    { id: "saleTotalUSD", label: "ОБЩЕЕ ПО КОЛИЧЕСТВУ ($)", width: "min-w-[190px]" },
   ];
 
   const investmentColumns: Array<{ id: keyof InvestmentRow; label: string; width: string }> = [
@@ -2082,74 +2119,74 @@ export function CreateContainerExcelPage({
             <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-center">
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Rakovinaga</th>
-                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Unitazga</th>
-                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Sifonga</th>
-                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Smesitelga</th>
-                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">Oynaga</th>
-                  <th className="border-b border-slate-300 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700">1 m3 transport</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Rakovinaga ($)</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Unitazga ($)</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Sifonga ($)</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Smesitelga ($)</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Oynaga ($)</th>
+                  <th className="border-b border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">1 m3 transport ($)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="border-r border-slate-300 px-3 py-3">
+                  <td className="border-r border-slate-300 bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.01"
                       value={customsRakovinaUsd}
                       onChange={(e) => setCustomsRakovinaUsd(e.target.value)}
-                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
-                  <td className="border-r border-slate-300 px-3 py-3">
+                  <td className="border-r border-slate-300 bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.01"
                       value={customsUnitazUsd}
                       onChange={(e) => setCustomsUnitazUsd(e.target.value)}
-                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
-                  <td className="border-r border-slate-300 px-3 py-3">
+                  <td className="border-r border-slate-300 bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.01"
                       value={customsSifonUsd}
                       onChange={(e) => setCustomsSifonUsd(e.target.value)}
-                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
-                  <td className="border-r border-slate-300 px-3 py-3">
+                  <td className="border-r border-slate-300 bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.01"
                       value={customsSmesitelUsd}
                       onChange={(e) => setCustomsSmesitelUsd(e.target.value)}
-                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
-                  <td className="border-r border-slate-300 px-3 py-3">
+                  <td className="border-r border-slate-300 bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.01"
                       value={customsOynaUsd}
                       onChange={(e) => setCustomsOynaUsd(e.target.value)}
-                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.000001"
                       value={transportUsdPerCbm}
                       onChange={(e) => setTransportUsdPerCbm(e.target.value)}
-                      className="w-full bg-transparent text-center text-lg font-semibold text-slate-900 outline-none"
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
                 </tr>
@@ -2294,11 +2331,7 @@ export function CreateContainerExcelPage({
                           );
                           return (
                             <td key={c.id} className="border-b border-r border-slate-300 bg-slate-50 px-3 py-3 text-center text-[15px] font-medium text-slate-700">
-                              {value > 0
-                                ? `${value.toFixed(2)}${
-                                    c.id === "averagePercent" ? "%" : ""
-                                  }`
-                                : "—"}
+                              {formatExcelCurrencyValue(value, c.id)}
                             </td>
                           );
                         }
@@ -2347,153 +2380,6 @@ export function CreateContainerExcelPage({
               </tbody>
               </table>
 
-              <div className="mt-5 border border-slate-300 bg-slate-50/60">
-                <div className="border-b border-[var(--border)] bg-slate-50/60 px-4 py-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-800">Добавленные товары</h3>
-                  <p className="text-xs text-slate-500">Нижний список по порядку основной Excel-таблицы.</p>
-                </div>
-              <table className="w-full border-separate border-spacing-0 border border-slate-300 bg-white text-left text-sm">
-                <thead className="bg-slate-100 text-slate-800">
-                  <tr>
-                    {columns.map((c) => (
-                      <th
-                        key={`summary-${c.id}`}
-                        className={`border-b border-r border-slate-300 px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-[0.08em] ${c.width}`}
-                      >
-                        {c.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const product = r.productId ? productMap.get(r.productId) ?? null : null;
-                    const metrics = computeRowMetrics({
-                      row: r,
-                      product,
-                      costingRuleMode: activeCostingRuleMode,
-                      totalRoadExpenses: activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? explicitExcelTotals.transport : expenseTotals.road,
-                      totalCustomsExpenses: activeCostingRuleMode === COSTING_RULE_MODES.CATEGORY_BASED_V2 ? explicitExcelTotals.customs : expenseTotals.customs,
-                      totalProductUsd: productTotals.totalUsd,
-                      totalProductLines: productLineCount,
-                      manualCustomsPerUnitUsd: toNumber(r.manualCustomsPerUnitUSD) || getCustomsTypeRate(r.customsType, liveCostingConfig),
-                      fallbackCustomsPerUnitUsd: customsFallbackMap.get(r.key) ?? 0,
-                      costingConfig: liveCostingConfig,
-                    });
-
-                    return (
-                      <tr key={`summary-row-${r.key}`}>
-                        {columns.map((c) => {
-                          if (c.id === "picture") {
-                            return (
-                              <td key={`summary-${r.key}-picture`} className="border-b border-r border-slate-200 px-2 py-2">
-                                {product?.imagePath ? (
-                                  <Image
-                                    src={product.imagePath}
-                                    alt={product.name}
-                                    width={56}
-                                    height={56}
-                                    className="h-14 w-14 rounded-sm object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-14 w-14 rounded-sm border border-dashed border-slate-300 bg-white" />
-                                )}
-                              </td>
-                            );
-                          }
-
-                          let value = "";
-                          switch (c.id) {
-                            case "factoryName":
-                            case "localName":
-                            case "priceCNY":
-                            case "saize":
-                            case "color":
-                            case "quantity":
-                            case "totalAmountCNY":
-                            case "cbm":
-                            case "kg":
-                            case "totalCbm":
-                            case "nwKgs":
-                            case "exchangeRate":
-                            case "totalAmountUSD":
-                            case "manualCustomsPerUnitUSD":
-                              value = String(r[c.id] ?? "").trim();
-                              break;
-                            case "unitUsd":
-                              value = metrics.unitUsdValue > 0 ? metrics.unitUsdValue.toFixed(2) : "";
-                              break;
-                            case "averagePercent":
-                              value = metrics.averagePercentValue > 0 ? `${metrics.averagePercentValue.toFixed(2)}%` : "";
-                              break;
-                            case "logisticsAverage":
-                              value = metrics.logisticsAverageValue > 0 ? metrics.logisticsAverageValue.toFixed(2) : "";
-                              break;
-                            case "perUnitTotal":
-                              value = metrics.perUnitTotalValue > 0 ? metrics.perUnitTotalValue.toFixed(2) : "";
-                              break;
-                            case "grandTotal":
-                              value = metrics.grandTotalValue > 0 ? metrics.grandTotalValue.toFixed(2) : "";
-                              break;
-                            case "transportPerUnit":
-                              value = metrics.transportPerUnitValue > 0 ? metrics.transportPerUnitValue.toFixed(2) : "";
-                              break;
-                            case "transportTotal":
-                              value = metrics.totalTransportUsd > 0 ? metrics.totalTransportUsd.toFixed(2) : "";
-                              break;
-                            case "customsPerUnit":
-                              value = metrics.customsPerUnitValue > 0 ? metrics.customsPerUnitValue.toFixed(2) : "";
-                              break;
-                            case "customsTotal":
-                              value = metrics.totalCustomsUsd > 0 ? metrics.totalCustomsUsd.toFixed(2) : "";
-                              break;
-                            case "explicitFinalTotalAmount":
-                              value = metrics.explicitPerUnitTotalValue > 0 ? metrics.explicitPerUnitTotalValue.toFixed(2) : "";
-                              break;
-                            case "explicitFinalTotalAllContainers":
-                              value = metrics.explicitGrandTotalValue > 0 ? metrics.explicitGrandTotalValue.toFixed(2) : "";
-                              break;
-                            case "productTotal":
-                              value = metrics.productTotalValue > 0 ? metrics.productTotalValue.toFixed(2) : "";
-                              break;
-                            case "productTotalCny":
-                              value = metrics.productTotalCnyValue > 0 ? metrics.productTotalCnyValue.toFixed(2) : "";
-                              break;
-                            case "costPriceUSD":
-                              value = metrics.unitUsdValue > 0 ? metrics.unitUsdValue.toFixed(2) : "";
-                              break;
-                            case "salePriceUSD":
-                              value = metrics.salePriceUsdValue > 0 ? metrics.salePriceUsdValue.toFixed(2) : "";
-                              break;
-                            case "saleTotalUSD":
-                              value = metrics.saleTotalUsdValue > 0 ? metrics.saleTotalUsdValue.toFixed(2) : "";
-                              break;
-                            default:
-                              value = "";
-                          }
-
-                          return (
-                            <td
-                              key={`summary-${r.key}-${c.id}`}
-                              className="border-b border-r border-slate-200 px-3 py-3 text-[13px] text-slate-700"
-                            >
-                              {value || "—"}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                  {!rows.length ? (
-                    <tr>
-                      <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={columns.length}>
-                        Пока нет добавленных товаров.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-              </div>
             </div>
           </div>
         </article>
@@ -2506,7 +2392,7 @@ export function CreateContainerExcelPage({
                   {summaryRow.map((item) => (
                     <th
                       key={item.label}
-                      className="border-b border-r border-slate-400 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-700 last:border-r-0"
+                      className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-700 last:border-r-0"
                     >
                       {item.label}
                     </th>
@@ -2518,7 +2404,7 @@ export function CreateContainerExcelPage({
                   {summaryRow.map((item) => (
                     <td
                       key={item.label}
-                      className="border-r border-slate-300 px-3 py-3 text-base font-semibold text-slate-900 last:border-r-0"
+                      className="border-r border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900 last:border-r-0"
                     >
                       {item.value}
                     </td>
@@ -2790,11 +2676,11 @@ export function CreateContainerExcelPage({
                     >
                       <span className="truncate font-medium text-slate-800">{p.sku}</span>
                       <span className="truncate text-slate-800">{p.name}</span>
-                      <span className="text-slate-700">{costTotal > 0 ? costTotal.toFixed(2) : "—"}</span>
-                      <span className="text-slate-700">{costTotalCny > 0 ? costTotalCny.toFixed(2) : "—"}</span>
-                      <span className="text-slate-700">{p.costPriceUSD > 0 ? p.costPriceUSD.toFixed(2) : "—"}</span>
-                      <span className="text-slate-700">{p.basePriceUSD > 0 ? p.basePriceUSD.toFixed(2) : "—"}</span>
-                      <span className="text-slate-700">{saleTotal > 0 ? saleTotal.toFixed(2) : "—"}</span>
+                      <span className="text-slate-700">{costTotal > 0 ? `${costTotal.toFixed(2)} $` : "—"}</span>
+                      <span className="text-slate-700">{costTotalCny > 0 ? `${costTotalCny.toFixed(2)} ¥` : "—"}</span>
+                      <span className="text-slate-700">{p.costPriceUSD > 0 ? `${p.costPriceUSD.toFixed(2)} $` : "—"}</span>
+                      <span className="text-slate-700">{p.basePriceUSD > 0 ? `${p.basePriceUSD.toFixed(2)} $` : "—"}</span>
+                      <span className="text-slate-700">{saleTotal > 0 ? `${saleTotal.toFixed(2)} $` : "—"}</span>
                       <span className="truncate text-slate-600">{p.size || "—"}</span>
                       <span className="truncate text-xs text-slate-500">{p.categoryName}</span>
                     </button>
