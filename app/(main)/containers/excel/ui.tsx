@@ -433,6 +433,7 @@ export function CreateContainerExcelPage({
   const [purchaseCny, setPurchaseCny] = useState("");
   const [rate, setRate] = useState(defaultRate ? String(defaultRate) : "");
   const [overallCustomsUSD, setOverallCustomsUSD] = useState("");
+  const [overallRoadUSD, setOverallRoadUSD] = useState("");
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<ProductOption | null>(null);
@@ -460,25 +461,6 @@ export function CreateContainerExcelPage({
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const activeCostingRuleMode = resolveCostingRuleMode(costingRuleMode);
-  const liveCostingConfig = useMemo(
-    () => ({
-      transportUsdPerCbm: toNumber(transportUsdPerCbm) > 0 ? toNumber(transportUsdPerCbm) : initialCostingConfig.transportUsdPerCbm,
-      customsRakovinaUsd: Math.max(0, toNumber(customsRakovinaUsd)),
-      customsUnitazUsd: Math.max(0, toNumber(customsUnitazUsd)),
-      customsSifonUsd: Math.max(0, toNumber(customsSifonUsd)),
-      customsSmesitelUsd: Math.max(0, toNumber(customsSmesitelUsd)),
-      customsOynaUsd: Math.max(0, toNumber(customsOynaUsd)),
-    }),
-    [
-      customsOynaUsd,
-      customsRakovinaUsd,
-      customsSifonUsd,
-      customsSmesitelUsd,
-      customsUnitazUsd,
-      initialCostingConfig.transportUsdPerCbm,
-      transportUsdPerCbm,
-    ],
-  );
 
   const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const productBySku = useMemo(() => new Map(products.map((p) => [p.sku.trim().toLowerCase(), p])), [products]);
@@ -604,6 +586,33 @@ export function CreateContainerExcelPage({
     [rows],
   );
 
+  const derivedTransportUsdPerCbm = useMemo(() => {
+    const overallRoad = toNumber(overallRoadUSD);
+    if (overallRoad > 0 && productTotals.totalCbm > 0) {
+      return overallRoad / productTotals.totalCbm;
+    }
+    return toNumber(transportUsdPerCbm) > 0 ? toNumber(transportUsdPerCbm) : initialCostingConfig.transportUsdPerCbm;
+  }, [overallRoadUSD, productTotals.totalCbm, transportUsdPerCbm, initialCostingConfig.transportUsdPerCbm]);
+
+  const liveCostingConfig = useMemo(
+    () => ({
+      transportUsdPerCbm: derivedTransportUsdPerCbm,
+      customsRakovinaUsd: Math.max(0, toNumber(customsRakovinaUsd)),
+      customsUnitazUsd: Math.max(0, toNumber(customsUnitazUsd)),
+      customsSifonUsd: Math.max(0, toNumber(customsSifonUsd)),
+      customsSmesitelUsd: Math.max(0, toNumber(customsSmesitelUsd)),
+      customsOynaUsd: Math.max(0, toNumber(customsOynaUsd)),
+    }),
+    [
+      customsOynaUsd,
+      customsRakovinaUsd,
+      customsSifonUsd,
+      customsSmesitelUsd,
+      customsUnitazUsd,
+      derivedTransportUsdPerCbm,
+    ],
+  );
+
   const expenseTotals = useMemo(() => {
     const totals = expenseRows.reduce(
       (acc, row) => {
@@ -615,12 +624,16 @@ export function CreateContainerExcelPage({
       },
       { road: 0, customs: 0, all: 0 },
     );
+    if (toNumber(overallRoadUSD) > 0) {
+      totals.road += toNumber(overallRoadUSD);
+      totals.all += toNumber(overallRoadUSD);
+    }
     if (effectiveOverallCustomsUSD > 0) {
       totals.customs += effectiveOverallCustomsUSD;
       totals.all += effectiveOverallCustomsUSD;
     }
     return totals;
-  }, [effectiveOverallCustomsUSD, expenseRows]);
+  }, [effectiveOverallCustomsUSD, expenseRows, overallRoadUSD]);
 
   const investedTotal = useMemo(
     () => investmentRows.reduce((sum, row) => sum + toNumber(row.investedAmountUSD), 0),
@@ -2113,7 +2126,7 @@ export function CreateContainerExcelPage({
         </form>
       </article>
 
-      <div className="grid gap-4">
+      <div className="grid auto-rows-max content-start gap-4">
         <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-center">
@@ -2124,6 +2137,7 @@ export function CreateContainerExcelPage({
                   <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Sifonga ($)</th>
                   <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Smesitelga ($)</th>
                   <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Oynaga ($)</th>
+                  <th className="border-b border-r border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">Yo'lkiraga ($)</th>
                   <th className="border-b border-slate-300 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-700">1 m3 transport ($)</th>
                 </tr>
               </thead>
@@ -2179,13 +2193,26 @@ export function CreateContainerExcelPage({
                       className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
+                  <td className="border-r border-slate-300 bg-white px-2 py-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={overallRoadUSD}
+                      onChange={(e) => setOverallRoadUSD(e.target.value)}
+                      className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
+                    />
+                  </td>
                   <td className="bg-white px-2 py-1.5">
                     <input
                       type="number"
                       min={0}
                       step="0.000001"
-                      value={transportUsdPerCbm}
-                      onChange={(e) => setTransportUsdPerCbm(e.target.value)}
+                      value={derivedTransportUsdPerCbm > 0 ? String(Number(derivedTransportUsdPerCbm.toFixed(6))) : transportUsdPerCbm}
+                      onChange={(e) => {
+                        setTransportUsdPerCbm(e.target.value);
+                        if (toNumber(overallRoadUSD) > 0) setOverallRoadUSD("");
+                      }}
                       className="h-10 w-full rounded-md border border-transparent bg-transparent px-2 text-center text-base font-semibold text-slate-900 outline-none focus:border-slate-300 focus:bg-slate-50"
                     />
                   </td>
@@ -2632,7 +2659,7 @@ export function CreateContainerExcelPage({
 
       {pickerOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setPickerOpen(false)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex h-[96vh] w-[98vw] max-w-none flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-base font-semibold text-slate-900">Выберите товар</h4>
               <button
@@ -2649,7 +2676,7 @@ export function CreateContainerExcelPage({
               placeholder="Поиск: SKU / название / категория"
               className="mt-3 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
             />
-            <div className="mt-3 max-h-[60vh] overflow-auto rounded-xl border border-[var(--border)]">
+            <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl border border-[var(--border)]">
               <div className="min-w-[1240px]">
                 <div className="grid grid-cols-[120px_180px_140px_140px_140px_140px_160px_1fr_120px] border-b border-[var(--border)] bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
                   <span>SKU</span>
